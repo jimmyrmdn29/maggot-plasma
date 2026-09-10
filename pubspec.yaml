@@ -1,0 +1,48 @@
+name: aplikasi_maggot
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.12.0 <4.0.0' # Diubah sesuai saran error
+
+dependencies:
+  flutter:
+    sdk: flutter
+    
+  flutter_launcher_icons: ^0.14.4
+  cloud_functions: ^6.4.0
+  cupertino_icons: ^1.0.6
+  firebase_core: ^4.14.0
+  firebase_auth: ^6.6.1
+  cloud_firestore: ^6.9.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  excel: ^4.0.0
+  path_provider: ^2.1.6
+  open_filex: ^4.5.0
+  intl: ^0.20.3
+  geolocator: ^14.0.3
+  image_picker: ^1.1.0
+  connectivity_plus: ^7.3.1
+  shared_preferences: ^2.2.2
+  firebase_storage: ^13.5.0 
+  http: ^1.6.0
+  cloudinary_public: ^0.23.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png"
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
+    - assets/images/telur.png
+    - assets/images/baby_maggot.png
+    - assets/images/maggot_lapar.png
+  

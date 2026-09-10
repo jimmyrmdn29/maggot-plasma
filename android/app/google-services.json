@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "407684585418",
+    "project_id": "maggot-plasma",
+    "storage_bucket": "maggot-plasma.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:407684585418:android:86d7af33ffe2a9f969a133",
+        "android_client_info": {
+          "package_name": "com.example.aplikasi_maggot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfq923KK_SPY85E2TDukZsZQy0viIaivw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

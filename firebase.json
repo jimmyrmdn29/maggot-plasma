@@ -1,0 +1,53 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "maggot-plasma",
+          "appId": "1:407684585418:android:86d7af33ffe2a9f969a133",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "maggot-plasma",
+          "configurations": {
+            "android": "1:407684585418:android:86d7af33ffe2a9f969a133",
+            "ios": "1:407684585418:ios:ee8df154e634e64969a133",
+            "macos": "1:407684585418:ios:ee8df154e634e64969a133",
+            "web": "1:407684585418:web:581cbdfa890535db69a133",
+            "windows": "1:407684585418:web:698378fbf6de6da069a133"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

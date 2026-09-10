@@ -1,0 +1,29 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+android/.gradle/
+android/app/build/
+android/local.properties
+android/**/*.iml
+
+# iOS
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+**/xcuserdata/
+
+# IDE
+.idea/
+.vscode/
+
+# File rahasia
+*.jks
+*.keystore
+serviceAccountKey.json

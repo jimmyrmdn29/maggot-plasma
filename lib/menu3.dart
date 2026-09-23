@@ -16,8 +16,8 @@ class MenuTiga extends StatefulWidget {
   final Future<void> Function(String batchKode, List<dynamic> detailTrays) onUpdateFotoBatch;
 
   // ⚙️ KONFIGURASI CLOUDINARY
-  static const String cloudName = 'lvtcqo9v'; 
-  static const String uploadPreset = 'preset_panen';   
+  static const String cloudName = 'CLOUDINARY_CLOUD_NAME'; 
+  static const String uploadPreset = 'CLOUDINARY_UPLOAD_PRESET';   
 
   const MenuTiga({
     super.key,

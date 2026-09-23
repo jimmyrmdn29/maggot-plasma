@@ -27,3 +27,5 @@ ios/.symlinks/
 *.jks
 *.keystore
 serviceAccountKey.json
+
+.env

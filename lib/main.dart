@@ -3,13 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_options.dart';
 
-// ⚙️ KONFIGURASI SEMUA ADA DI: lib/app_config.dart
-//    (ubah reset counter tray, hari auto panen, rasio estimasi, kualitas foto)
-
-// Import File Menu Anda
+// Import File Menu & Halaman
 import 'auth_service.dart';
 import 'login_page.dart';
 import 'email_verification_page.dart';
@@ -20,6 +17,9 @@ import 'menu2.dart';
 import 'menu3.dart';
 import 'menu4.dart';
 
+// =========================================================================
+// 1. ENTRY POINT & INITIALIZATION
+// =========================================================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -29,12 +29,12 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
-  // Tangkap semua error Flutter yang gak ke-handle, kirim ke Crashlytics
+  // Tangkap error Flutter Framework
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
   };
 
-  // Tangkap error yang terjadi di luar Flutter framework (misal di isolate lain)
+  // Tangkap error di luar framework (Isolate)
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
@@ -43,6 +43,9 @@ void main() async {
   runApp(const AplikasiMaggot());
 }
 
+// =========================================================================
+// 2. ROOT APP & AUTH GATEWAY
+// =========================================================================
 class AplikasiMaggot extends StatelessWidget {
   const AplikasiMaggot({super.key});
 
@@ -57,46 +60,53 @@ class AplikasiMaggot extends StatelessWidget {
       ),
       home: StreamBuilder<User?>(
         stream: AuthService().userStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        builder: (context, authSnapshot) {
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return const _LoadingScreen();
           }
 
-          if (snapshot.hasData) {
-            return StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(snapshot.data!.uid)
-                  .snapshots(),
-              builder: (context, userSnap) {
-                if (!userSnap.hasData) {
-                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                }
+          final User? user = authSnapshot.data;
+          if (user == null) return const LoginPage();
 
-                var userData = userSnap.data!.data() as Map<String, dynamic>?;
-                if (userData == null) return const ProfilTidakDitemukanPage();
-
-                // REDIRECT BERDASARKAN ROLE
-                if (userData['role'] == 'admin') {
-                  return const DashboardAdminWeb();
-                }
-
-                // CEK VERIFIKASI EMAIL — hanya mitra; admin sudah lolos di atas
-                if (!snapshot.data!.emailVerified) {
-                  return const EmailVerificationPage();
-                }
-
-                return const HalamanNavigasi();
-              },
-            );
-          }
-          return const LoginPage();
+          return _UserRoleRouter(user: user);
         },
       ),
     );
   }
 }
 
+// Menangani Pengalihan Role (Admin, Mitra Belum Verif, Mitra Aktif)
+class _UserRoleRouter extends StatelessWidget {
+  final User user;
+  const _UserRoleRouter({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, userSnap) {
+        if (!userSnap.hasData) return const _LoadingScreen();
+
+        final userData = userSnap.data!.data() as Map<String, dynamic>?;
+        if (userData == null) return const ProfilTidakDitemukanPage();
+
+        if (userData['role'] == 'admin') {
+          return const DashboardAdminWeb();
+        }
+
+        if (!user.emailVerified) {
+          return const EmailVerificationPage();
+        }
+
+        return const HalamanNavigasi();
+      },
+    );
+  }
+}
+
+// =========================================================================
+// 3. HALAMAN NAVIGASI UTAMA
+// =========================================================================
 class HalamanNavigasi extends StatefulWidget {
   const HalamanNavigasi({super.key});
 
@@ -106,7 +116,6 @@ class HalamanNavigasi extends StatefulWidget {
 
 class _HalamanNavigasiState extends State<HalamanNavigasi> {
   int _indexMenu = 0;
- 
 
   @override
   Widget build(BuildContext context) {
@@ -114,162 +123,73 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
     if (user == null) return const LoginPage();
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
-        }
+        if (!snapshot.hasData) return const _LoadingScreen();
 
-        var userData = snapshot.data!.data() as Map<String, dynamic>?;
-        if (userData == null) {
-          return const ProfilTidakDitemukanPage();
-        }
+        final userData = snapshot.data!.data() as Map<String, dynamic>?;
+        if (userData == null) return const ProfilTidakDitemukanPage();
 
-      
+        final List<Map<String, dynamic>> dbSiklus = List<Map<String, dynamic>>.from(userData['siklus'] ?? []);
+        final List<Map<String, dynamic>> dbPanen = List<Map<String, dynamic>>.from(userData['panen'] ?? []);
+        final List<Map<String, dynamic>> dbBatch = List<Map<String, dynamic>>.from(userData['batch'] ?? []);
 
-        // AMBIL DATA LIST DARI FIRESTORE
-        List<Map<String, dynamic>> dbSiklus =
-            List<Map<String, dynamic>>.from(userData['siklus'] ?? []);
-        List<Map<String, dynamic>> dbPanen =
-            List<Map<String, dynamic>>.from(userData['panen'] ?? []);
-        List<Map<String, dynamic>> dbBatch =
-            List<Map<String, dynamic>>.from(userData['batch'] ?? []);
-
-        // DEFINISI HALAMAN MENU
+        // Definisi Halaman Bersih (Logika Firestore dipindah ke Repository)
         final List<Widget> halaman = [
-          // MENU 1: INPUT DATA
           MenuSatu(
-  nomorTrayOtomatis: userData['counterTray'] ?? 1,
-  namaMitra: userData['nama'] ?? "Mitra",
-  onTambahBanyakData: (daftarTray) async {
-    final int counterAwal = userData['counterTray'] ?? 1;
-    final List<Map<String, dynamic>> trayBaru = [];
-
-    for (int i = 0; i < daftarTray.length; i++) {
-      final item = daftarTray[i];
-      trayBaru.add({
-        "peternak": userData['nama'] ?? "Mitra",
-        "nama": "Tray ${counterAwal + i}",
-        "beratTelur": item['beratTelur'],
-        "tanggalMulai": item['tanggalMulai'],
-        "cekM1": null,
-        "cekM2": null,
-      });
-    }
-
-    dbSiklus.addAll(trayBaru);
-
-    // SATU write ke Firestore buat semua tray — anti race condition
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'siklus': dbSiklus,
-      'counterTray': counterAwal + daftarTray.length,
-    });
-  },
-),
-          // MENU 2: PANTAU (Logika 0-5, 6-13, 14-20 & Auto Panen/Mati)
+            nomorTrayOtomatis: userData['counterTray'] ?? 1,
+            namaMitra: userData['nama'] ?? "Mitra",
+            onTambahBanyakData: (daftarTray) => _MaggotRepository.tambahBanyakTray(
+              uid: user.uid,
+              namaMitra: userData['nama'] ?? "Mitra",
+              counterAwal: userData['counterTray'] ?? 1,
+              daftarTrayBaru: daftarTray,
+              dbSiklusLama: dbSiklus,
+            ),
+          ),
           MenuDua(
             daftarSiklus: dbSiklus,
-            onKonfirmasiSehat: (index, minggu) {
-              dbSiklus[index]['cekM$minggu'] = DateTime.now().toIso8601String();
-              FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-                'siklus': dbSiklus,
-              });
-            },
-            onPanenOtomatis: (index, dataPanen) {
-              dbPanen.add(dataPanen);
-              dbSiklus.removeAt(index);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-                'siklus': dbSiklus,
-                'panen': dbPanen,
-              });
-            },
-            onGagalKePanen: (index, dataGagal) {
-              dbPanen.add(dataGagal);
-              dbSiklus.removeAt(index);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-                'siklus': dbSiklus,
-                'panen': dbPanen,
-              });
-            },
+            onKonfirmasiSehat: (index, minggu) => _MaggotRepository.konfirmasiSehat(
+              uid: user.uid,
+              dbSiklus: dbSiklus,
+              index: index,
+              minggu: minggu,
+            ),
+            onPanenOtomatis: (index, dataPanen) => _MaggotRepository.pindahkanKePanen(
+              uid: user.uid,
+              dbSiklus: dbSiklus,
+              dbPanen: dbPanen,
+              index: index,
+              dataBaru: dataPanen,
+            ),
+            onGagalKePanen: (index, dataGagal) => _MaggotRepository.pindahkanKePanen(
+              uid: user.uid,
+              dbSiklus: dbSiklus,
+              dbPanen: dbPanen,
+              index: index,
+              dataBaru: dataGagal,
+            ),
           ),
-
-          // MENU 3: VERIFIKASI (Kamera + Berdiam Diri + Bungkus)
-         MenuTiga(
-  daftarPanen: dbPanen,
-  onBungkusBatch: (paketBatch) async {
-    // 1. Ambil daftar nama tray yang baru saja dibungkus
-    final List<dynamic> detailTrays = paketBatch['detailTrays'] ?? [];
-    final Set<String> namaTraySelesai =
-        detailTrays.map((t) => t['nama'].toString()).toSet();
-
-    // 2. Buang tray yang sudah dibungkus dari dbPanen (Sisa antrean)
-    final sisaPanen = dbPanen
-        .where((item) => !namaTraySelesai.contains(item['nama'].toString()))
-        .toList();
-
-    // 3. AMBIL KODE BATCH SEBAGAI ID DOKUMEN (Contoh: BATCH-241023-143000)
-    final String batchKode = paketBatch['batchKode'] ?? 
-        "BATCH-${DateTime.now().millisecondsSinceEpoch}";
-
-    // 4. GUNAKAN FIRESTORE WRITE BATCH (Simpan atomik tanpa resiko corrupt)
-    final firestore = FirebaseFirestore.instance;
-    final batchWrite = firestore.batch();
-
-    // 👉 A. Simpan paket batch LENGKAP (termasuk foto Base64 untuk Excel) ke SUB-KOLEKSI
-    final docBatchRef = firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('batches') // 📁 Sub-koleksi khusus riwayat batch
-        .doc(batchKode);
-
-    batchWrite.set(docBatchRef, paketBatch);
-
-    // 👉 B. Buat Ringkasan Super Ringan KHUSUS jika Menu 4 membaca dari dokumen User
-    // (Foto Base64 dibuang dari sini agar dokumen User HP tetap ringan & < 1 MB)
-    final ringkasanMenuEmpat = {
-      'batchKode': batchKode,
-      'tanggalBungkus': paketBatch['tanggalBungkus'],
-      'tanggalFormatted': paketBatch['tanggalFormatted'],
-      'totalBeratKg': paketBatch['totalBeratKg'],
-      'jumlahTray': paketBatch['jumlahTray'],
-      'status': paketBatch['status'],
-      // HANYA simpan nama tray, JANGAN bawa fotoBase64 ke dokumen user
-      'daftarNamaTray': detailTrays.map((e) => e['nama']).toList(),
-    };
-
-    // 👉 C. Update dokumen utama User
-    final docUserRef = firestore.collection('users').doc(user.uid);
-    batchWrite.update(docUserRef, {
-      'panen': sisaPanen, // Antrean berkurang akurat
-      'batch': FieldValue.arrayUnion([ringkasanMenuEmpat]), // Ringkasan ringan untuk Menu 4
-    });
-
-    // 🚀 EKSEKUSI SEKALIGUS (Anti Gagal & Bebas Error 'invalid-argument')
-    await batchWrite.commit();
-  },
-   onUpdateFotoBatch: (batchKode, detailTraysTerbaru) async {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('batches')
-        .doc(batchKode)
-        .update({'detailTrays': detailTraysTerbaru});
-  },
-), 
-
-          // MENU 4: RIWAYAT
+          MenuTiga(
+            daftarPanen: dbPanen,
+            onBungkusBatch: (paketBatch) => _MaggotRepository.bungkusBatch(
+              uid: user.uid,
+              paketBatch: paketBatch,
+              dbPanenLama: dbPanen,
+            ),
+            onUpdateFotoBatch: (batchKode, detailTrays) => _MaggotRepository.updateFotoBatch(
+              uid: user.uid,
+              batchKode: batchKode,
+              detailTraysTerbaru: detailTrays,
+            ),
+          ),
           MenuEmpat(
             daftarBatch: dbBatch,
-            onHapusBatchManual: (index) {
-              dbBatch.removeAt(index);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-                'batch': dbBatch,
-              });
-            },
+            onHapusBatchManual: (index) => _MaggotRepository.hapusBatchManual(
+              uid: user.uid,
+              dbBatch: dbBatch,
+              index: index,
+            ),
           ),
         ];
 
@@ -310,6 +230,144 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
           ),
         );
       },
+    );
+  }
+}
+
+// =========================================================================
+// 4. REPOSITORY LAYER (Pusat Transaksi & Operasi Firestore)
+// =========================================================================
+class _MaggotRepository {
+  static final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // Menu 1: Tambah Banyak Tray Sekaligus
+  static Future<void> tambahBanyakTray({
+    required String uid,
+    required String namaMitra,
+    required int counterAwal,
+    required List<Map<String, dynamic>> daftarTrayBaru,
+    required List<Map<String, dynamic>> dbSiklusLama,
+  }) async {
+    final List<Map<String, dynamic>> hasilBaru = [];
+
+    for (int i = 0; i < daftarTrayBaru.length; i++) {
+      final item = daftarTrayBaru[i];
+      hasilBaru.add({
+        "peternak": namaMitra,
+        "nama": "Tray ${counterAwal + i}",
+        "beratTelur": item['beratTelur'],
+        "tanggalMulai": item['tanggalMulai'],
+        "cekM1": null,
+        "cekM2": null,
+      });
+    }
+
+    dbSiklusLama.addAll(hasilBaru);
+
+    await _db.collection('users').doc(uid).update({
+      'siklus': dbSiklusLama,
+      'counterTray': counterAwal + daftarTrayBaru.length,
+    });
+  }
+
+  // Menu 2: Verifikasi Sehat M1/M2
+  static Future<void> konfirmasiSehat({
+    required String uid,
+    required List<Map<String, dynamic>> dbSiklus,
+    required int index,
+    required int minggu,
+  }) async {
+    dbSiklus[index]['cekM$minggu'] = DateTime.now().toIso8601String();
+    await _db.collection('users').doc(uid).update({'siklus': dbSiklus});
+  }
+
+  // Menu 2: Pindah dari Siklus ke Panen
+  static Future<void> pindahkanKePanen({
+    required String uid,
+    required List<Map<String, dynamic>> dbSiklus,
+    required List<Map<String, dynamic>> dbPanen,
+    required int index,
+    required Map<String, dynamic> dataBaru,
+  }) async {
+    dbPanen.add(dataBaru);
+    dbSiklus.removeAt(index);
+    await _db.collection('users').doc(uid).update({
+      'siklus': dbSiklus,
+      'panen': dbPanen,
+    });
+  }
+
+  // Menu 3: Bungkus Batch Atomik (Sub-koleksi + Ringkasan Ringan)
+  static Future<void> bungkusBatch({
+    required String uid,
+    required Map<String, dynamic> paketBatch,
+    required List<Map<String, dynamic>> dbPanenLama,
+  }) async {
+    final List<dynamic> detailTrays = paketBatch['detailTrays'] ?? [];
+    final Set<String> namaTraySelesai = detailTrays.map((t) => t['nama'].toString()).toSet();
+
+    final sisaPanen = dbPanenLama.where((item) => !namaTraySelesai.contains(item['nama'].toString())).toList();
+    final String batchKode = paketBatch['batchKode'] ?? "BATCH-${DateTime.now().millisecondsSinceEpoch}";
+
+    final batchWrite = _db.batch();
+
+    // 1. Simpan detail penuh ke Sub-koleksi
+    final docBatchRef = _db.collection('users').doc(uid).collection('batches').doc(batchKode);
+    batchWrite.set(docBatchRef, paketBatch);
+
+    // 2. Buat ringkasan ringan untuk Menu 4 (Anti limit 1MB Firestore)
+    final ringkasanMenuEmpat = {
+      'batchKode': batchKode,
+      'tanggalBungkus': paketBatch['tanggalBungkus'],
+      'tanggalFormatted': paketBatch['tanggalFormatted'],
+      'totalBeratKg': paketBatch['totalBeratKg'],
+      'jumlahTray': paketBatch['jumlahTray'],
+      'status': paketBatch['status'],
+      'daftarNamaTray': detailTrays.map((e) => e['nama']).toList(),
+    };
+
+    // 3. Simpan ke Dokumen Utama
+    final docUserRef = _db.collection('users').doc(uid);
+    batchWrite.update(docUserRef, {
+      'panen': sisaPanen,
+      'batch': FieldValue.arrayUnion([ringkasanMenuEmpat]),
+    });
+
+    await batchWrite.commit();
+  }
+
+  // Menu 3: Update URL Foto Cloudinary ke Sub-koleksi Batches
+  static Future<void> updateFotoBatch({
+    required String uid,
+    required String batchKode,
+    required List<dynamic> detailTraysTerbaru,
+  }) async {
+    await _db.collection('users').doc(uid).collection('batches').doc(batchKode).update({
+      'detailTrays': detailTraysTerbaru,
+    });
+  }
+
+  // Menu 4: Hapus Batch Manual
+  static Future<void> hapusBatchManual({
+    required String uid,
+    required List<Map<String, dynamic>> dbBatch,
+    required int index,
+  }) async {
+    dbBatch.removeAt(index);
+    await _db.collection('users').doc(uid).update({'batch': dbBatch});
+  }
+}
+
+// =========================================================================
+// 5. HELPER WIDGET
+// =========================================================================
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

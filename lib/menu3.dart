@@ -10,14 +10,60 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:path_provider/path_provider.dart';
 
+// =========================================================================
+// 1. SERVICE LAYER (Menangani Upload Cloudinary secara Terisolasi & Bersih)
+// =========================================================================
+class _CloudinaryPanenService {
+  static const String cloudName = 'lvtcqo9v';
+  static const String uploadPreset = 'preset_panen';
+  static const String folderName = 'panen_maggot';
+
+  final CloudinaryPublic _client = CloudinaryPublic(
+    cloudName,
+    uploadPreset,
+    cache: false,
+  );
+
+  Future<String?> uploadFoto(String localPath) async {
+    try {
+      final file = File(localPath);
+      if (!await file.exists()) return null;
+
+      final CloudinaryResponse res = await _client.uploadFile(
+        CloudinaryFile.fromFile(
+          localPath,
+          resourceType: CloudinaryResourceType.Image,
+          folder: folderName,
+        ),
+      );
+      return res.secureUrl;
+    } catch (e) {
+      debugPrint("Gagal upload Cloudinary: $e");
+      return null;
+    }
+  }
+}
+
+// =========================================================================
+// 2. KONSTANTA PENYIMPANAN LOKAL
+// =========================================================================
+abstract class _StorageKeys {
+  static const String draft = 'DRAFT_PANEN_TEMPORER_MAGGOT';
+  static const String queue = 'ANTREAN_SYNC_LATAR_BELAKANG_MAGGOT';
+  static const String trayDibungkus = 'LIST_TRAY_SELESAI_DIBUNGKUS_MAGGOT';
+}
+
+// =========================================================================
+// 3. WIDGET UTAMA (MENU TIGA)
+// =========================================================================
 class MenuTiga extends StatefulWidget {
   final List<Map<String, dynamic>> daftarPanen;
   final Future<void> Function(Map<String, dynamic>) onBungkusBatch;
   final Future<void> Function(String batchKode, List<dynamic> detailTrays) onUpdateFotoBatch;
 
-  // ⚙️ KONFIGURASI CLOUDINARY
-  static const String cloudName = 'CLOUDINARY_CLOUD_NAME'; 
-  static const String uploadPreset = 'CLOUDINARY_UPLOAD_PRESET';   
+  // Tetap disediakan jika file lain masih merujuk ke konstanta ini
+  static const String cloudName = _CloudinaryPanenService.cloudName;
+  static const String uploadPreset = _CloudinaryPanenService.uploadPreset;
 
   const MenuTiga({
     super.key,
@@ -34,18 +80,17 @@ class _MenuTigaState extends State<MenuTiga>
     with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   final Map<String, TextEditingController> _ctrls = {};
   List<Map<String, dynamic>> _kantongRahasia = [];
-  Set<String> _trayTelahDibungkus = {}; // 🔒 Menyimpan tray yang sudah dibungkus agar tidak balik lagi
+  Set<String> _trayTelahDibungkus = {};
+  
   bool _loading = false;
   bool _isInitLoading = true;
-  bool _isProcessingBungkus = false; // 🔒 Mencegah spam klik tombol bungkus
+  bool _isProcessingBungkus = false;
   String _statusPesanLoading = "Memproses...";
 
-  late TabController _tabController;
-  static const String _storageDraftKey = 'DRAFT_PANEN_TEMPORER_MAGGOT';
-  static const String _storageQueueKey = 'ANTREAN_SYNC_LATAR_BELAKANG_MAGGOT';
-  static const String _storageTrayDibungkusKey = 'LIST_TRAY_SELESAI_DIBUNGKUS_MAGGOT';
-
+  late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
+  final _CloudinaryPanenService _cloudinaryService = _CloudinaryPanenService();
+
   static bool _sedangSyncLatarBelakang = false;
 
   @override
@@ -57,7 +102,6 @@ class _MenuTigaState extends State<MenuTiga>
     _tabController = TabController(length: 2, vsync: this);
     _muatDataLokal();
 
-    // Otomatis cek dan sinkronisasi antrean yang tertunda di latar belakang
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _jalankanSyncLatarBelakang();
     });
@@ -74,20 +118,18 @@ class _MenuTigaState extends State<MenuTiga>
   }
 
   // ==========================================================
-  // 1. MANAJEMEN PENYIMPANAN LOCAL & ANTREAN SENYAP
+  // MANAJEMEN PENYIMPANAN LOCAL
   // ==========================================================
   Future<void> _muatDataLokal() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Muat Tray yang sudah selesai dibungkus
-      final List<String>? listDibungkus = prefs.getStringList(_storageTrayDibungkusKey);
+      final List<String>? listDibungkus = prefs.getStringList(_StorageKeys.trayDibungkus);
       if (listDibungkus != null) {
         _trayTelahDibungkus = listDibungkus.toSet();
       }
 
-      // Muat Draft Siap Kirim
-      final String? draftJson = prefs.getString(_storageDraftKey);
+      final String? draftJson = prefs.getString(_StorageKeys.draft);
       if (draftJson != null && draftJson.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(draftJson);
         _kantongRahasia = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -103,30 +145,25 @@ class _MenuTigaState extends State<MenuTiga>
     try {
       final prefs = await SharedPreferences.getInstance();
       final String jsonStr = jsonEncode(_kantongRahasia, toEncodable: _customJsonSerializer);
-      await prefs.setString(_storageDraftKey, jsonStr);
+      await prefs.setString(_StorageKeys.draft, jsonStr);
     } catch (_) {}
   }
 
   Future<void> _hapusDraftDariDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_storageDraftKey);
+      await prefs.remove(_StorageKeys.draft);
     } catch (_) {}
   }
 
   dynamic _customJsonSerializer(dynamic item) {
-    if (item is Timestamp) {
-      return item.toDate().toIso8601String();
-    } else if (item is DateTime) {
-      return item.toIso8601String();
-    }
+    if (item is Timestamp) return item.toDate().toIso8601String();
+    if (item is DateTime) return item.toIso8601String();
     return item.toString();
   }
 
-  // Saring antrean: Bukan yang ada di Siap Kirim DAN Bukan yang sudah Pernah Dibungkus
   List<Map<String, dynamic>> get _antreanAktif {
-    final Set<String> namaDiKantong =
-        _kantongRahasia.map((e) => e['nama'].toString()).toSet();
+    final Set<String> namaDiKantong = _kantongRahasia.map((e) => e['nama'].toString()).toSet();
 
     return widget.daftarPanen.where((item) {
       final String nama = item['nama'].toString();
@@ -137,19 +174,15 @@ class _MenuTigaState extends State<MenuTiga>
   }
 
   TextEditingController _getController(String key) {
-    if (!_ctrls.containsKey(key)) {
-      _ctrls[key] = TextEditingController();
-    }
-    return _ctrls[key]!;
+    return _ctrls.putIfAbsent(key, () => TextEditingController());
   }
 
   // ==========================================================
-  // 2. KONEKSI & GPS
+  // KONEKSI & GPS DENGAN PROTEKSI FAKE GPS
   // ==========================================================
   Future<bool> _cekAdaInternet() async {
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (_) {
       return false;
@@ -198,9 +231,15 @@ class _MenuTigaState extends State<MenuTiga>
           style: TextStyle(fontSize: 13),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("BATAL", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("BATAL", style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[800],
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await Geolocator.openLocationSettings();
@@ -220,16 +259,50 @@ class _MenuTigaState extends State<MenuTiga>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text("Izin Lokasi Diblokir", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: const Text("Silakan izinkan akses lokasi melalui Pengaturan Aplikasi.", style: TextStyle(fontSize: 13)),
+        content: const Text(
+          "Silakan izinkan akses lokasi melalui Pengaturan Aplikasi.",
+          style: TextStyle(fontSize: 13),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("BATAL")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[800],
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               await Geolocator.openAppSettings();
             },
             child: const Text("PENGATURAN"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _tampilkanDialogFakeGps() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.security, color: Colors.red, size: 26),
+            SizedBox(width: 8),
+            Text("Peringatan Keamanan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          "Terdeteksi lokasi palsu (Fake GPS / Mock Location)! Sistem menolak titik koordinat tiruan. Mohon matikan aplikasi Fake GPS untuk memverifikasi panen.",
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("SAYA MENGERTI"),
           ),
         ],
       ),
@@ -250,55 +323,72 @@ class _MenuTigaState extends State<MenuTiga>
     }
   }
 
+  Future<File> _simpanFotoLokal(XFile foto) async {
+    final Directory docDir = await getApplicationDocumentsDirectory();
+    final String fileName = "panen_${DateTime.now().millisecondsSinceEpoch}.jpg";
+    return await File(foto.path).copy('${docDir.path}/$fileName');
+  }
+
   // ==========================================================
-  // 3. VERIFIKASI TRAY
+  // VERIFIKASI TRAY
   // ==========================================================
   Future<void> _verifikasi(Map<String, dynamic> data) async {
+    // 1. Anti Double-Click / Race Condition Protection
+    if (_loading || _isProcessingBungkus) return;
+
     final String trayName = data['nama']?.toString() ?? 'Tray';
     final bool isGagal = data['status'] == "GAGAL";
     final ctrl = _getController(trayName);
 
-    if (!isGagal && ctrl.text.trim().isEmpty) {
-      _showSnackbar("Isi berat hasil panen $trayName terlebih dahulu!", isError: true);
-      return;
+    // 2. Validasi Desimal Angka
+    if (!isGagal) {
+      final cleanText = ctrl.text.trim().replaceAll(',', '.');
+      final double? beratVal = double.tryParse(cleanText);
+      if (cleanText.isEmpty || beratVal == null) {
+        _showSnackbar("Isi berat hasil panen $trayName dengan angka yang valid!", isError: true);
+        return;
+      }
     }
 
     final bool gpsSiap = await _pastikanGpsAktif();
     if (!gpsSiap) return;
 
     final gpsFuture = _getFastLocation();
-    final cameraFuture = _picker.pickImage(
+
+    final XFile? foto = await _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 70,
       maxWidth: 1280,
       maxHeight: 1280,
     );
 
-    final XFile? foto = await cameraFuture;
     if (foto == null) return;
 
     setState(() {
       _loading = true;
-      _statusPesanLoading = "Menyimpan foto ke memori HP...";
+      _statusPesanLoading = "Memvalidasi GPS & menyimpan foto...";
     });
 
     try {
       final Position? pos = await gpsFuture;
+
+      // 3. Validasi Keamanan Satelit Anti-Fake GPS
+      if (pos != null && pos.isMocked) {
+        setState(() => _loading = false);
+        _tampilkanDialogFakeGps();
+        return;
+      }
+
       final String koordinatGps = (pos != null)
           ? "${pos.latitude.toStringAsFixed(6)},${pos.longitude.toStringAsFixed(6)}"
           : "-6.200000,106.816666";
 
-      // Simpan file lokal di HP
-      final Directory docDir = await getApplicationDocumentsDirectory();
-      final String fileName = "panen_${DateTime.now().millisecondsSinceEpoch}.jpg";
-      final File localFile = await File(foto.path).copy('${docDir.path}/$fileName');
+      final File localFile = await _simpanFotoLokal(foto);
 
       String tglMulaiFormatted = "-";
       if (data['tanggalMulai'] != null) {
         var tgl = data['tanggalMulai'];
-        DateTime dt = (tgl is Timestamp)
-            ? tgl.toDate()
-            : (tgl is DateTime ? tgl : DateTime.now());
+        DateTime dt = (tgl is Timestamp) ? tgl.toDate() : (tgl is DateTime ? tgl : DateTime.now());
         tglMulaiFormatted = DateFormat('dd/MM/yyyy').format(dt);
       }
 
@@ -348,10 +438,9 @@ class _MenuTigaState extends State<MenuTiga>
   }
 
   // ==========================================================
-  // 4. BUNGKUS BATCH INSTAN + CEGAH DUPLIKASI SPAM
+  // BUNGKUS BATCH & SINKRONISASI
   // ==========================================================
   Future<void> _prosesBungkusInstan() async {
-    // 🔒 PENGAMAN: Jika sedang memproses atau data kosong, tolak klik tambahan!
     if (_isProcessingBungkus || _loading || _kantongRahasia.isEmpty) return;
 
     setState(() {
@@ -391,28 +480,23 @@ class _MenuTigaState extends State<MenuTiga>
         "detailTrays": List<Map<String, dynamic>>.from(_kantongRahasia),
       };
 
-      // 1. Catat nama-nama tray agar permanen HILANG dari antrean Menu 3
       for (var item in _kantongRahasia) {
         _trayTelahDibungkus.add(item['nama'].toString());
       }
-      await prefs.setStringList(_storageTrayDibungkusKey, _trayTelahDibungkus.toList());
+      await prefs.setStringList(_StorageKeys.trayDibungkus, _trayTelahDibungkus.toList());
 
-      // 2. Kirim Ringkasan ke Menu 4 (Offline/Online otomatis via callback)
       await widget.onBungkusBatch(paketBatch);
 
-      // 3. Masukkan ke Antrean Sync Latar Belakang (Menunggu Sinyal)
-      final List<String> queue = prefs.getStringList(_storageQueueKey) ?? [];
+      final List<String> queue = prefs.getStringList(_StorageKeys.queue) ?? [];
       queue.add(jsonEncode(paketBatch, toEncodable: _customJsonSerializer));
-      await prefs.setStringList(_storageQueueKey, queue);
+      await prefs.setStringList(_StorageKeys.queue, queue);
 
-      // 4. Bersihkan Tab Siap Kirim & Hapus Draft Sementara
       _kantongRahasia.clear();
       await _hapusDraftDariDisk();
 
       _tabController.animateTo(0);
       _showSnackbar("🎉 $batchKode Berhasil Dibungkus! Tersimpan di Menu 4.", isError: false);
 
-      // 5. Coba jalankan sinkronisasi senyap jika langsung ada internet
       _jalankanSyncLatarBelakang();
     } catch (e) {
       _showSnackbar("Terjadi kesalahan saat membungkus: $e", isError: true);
@@ -426,14 +510,14 @@ class _MenuTigaState extends State<MenuTiga>
     }
   }
 
-  // Mesin Latar Belakang: Upload foto & kirim batch saat internet stabil
+  // SINKRONISASI LATAR BELAKANG TERHEDGEL (ANTI DATA LOSS)
   Future<void> _jalankanSyncLatarBelakang() async {
     if (_sedangSyncLatarBelakang) return;
     _sedangSyncLatarBelakang = true;
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      List<String> queue = prefs.getStringList(_storageQueueKey) ?? [];
+      List<String> queue = prefs.getStringList(_StorageKeys.queue) ?? [];
       if (queue.isEmpty) {
         _sedangSyncLatarBelakang = false;
         return;
@@ -442,53 +526,57 @@ class _MenuTigaState extends State<MenuTiga>
       final bool online = await _cekAdaInternet();
       if (!online) {
         _sedangSyncLatarBelakang = false;
-        return; // Tunggu koneksi internet tersedia
+        return;
       }
 
-      final cloudinary = CloudinaryPublic(MenuTiga.cloudName, MenuTiga.uploadPreset, cache: false);
       final List<String> sisaQueue = [];
 
       for (String batchRaw in queue) {
         try {
           Map<String, dynamic> batch = jsonDecode(batchRaw);
           List<dynamic> details = batch['detailTrays'] ?? [];
+          bool adaFotoGagal = false;
 
-          // Upload semua foto biopon ke Cloudinary
+          // Upload menggunakan Service Cloudinary secara bertahap
           for (var tray in details) {
             String existingUrl = tray['fotoUrl'] ?? '';
             String? localPath = tray['fotoLocalPath'];
 
             if (existingUrl.isEmpty && localPath != null && localPath.isNotEmpty) {
-              File f = File(localPath);
-              if (await f.exists()) {
-                CloudinaryResponse res = await cloudinary.uploadFile(
-                  CloudinaryFile.fromFile(localPath, resourceType: CloudinaryResourceType.Image, folder: 'panen_maggot'),
-                );
-                tray['fotoUrl'] = res.secureUrl;
+              final uploadedUrl = await _cloudinaryService.uploadFoto(localPath);
+              if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+                tray['fotoUrl'] = uploadedUrl;
                 try {
-                  await f.delete(); // Hapus file lokal setelah aman di cloud
+                  final f = File(localPath);
+                  if (await f.exists()) await f.delete();
                 } catch (_) {}
+              } else {
+                adaFotoGagal = true;
               }
             }
           }
 
-          // Konversi format tanggal kembali ke Timestamp
           if (batch['tanggalBungkus'] is String) {
             batch['tanggalBungkus'] = Timestamp.fromDate(DateTime.parse(batch['tanggalBungkus']));
           }
 
-          // Perbarui data dengan URL foto ke Admin Firestore
           final String batchKodeSync = batch['batchKode'] ?? '';
-if (batchKodeSync.isNotEmpty) {
-  await widget.onUpdateFotoBatch(batchKodeSync, details);
-}
+          if (batchKodeSync.isNotEmpty) {
+            await widget.onUpdateFotoBatch(batchKodeSync, details);
+          }
+
+          // JIKA MASIH ADA FOTO YANG GAGAL KARENA SINYAL PUTUS,
+          // PERTAHANKAN BATCH DENGAN PROGRESS TERBARU DI ANTREAN
+          if (adaFotoGagal) {
+            sisaQueue.add(jsonEncode(batch, toEncodable: _customJsonSerializer));
+          }
         } catch (e) {
           debugPrint("Sync tertunda: $e");
           sisaQueue.add(batchRaw);
         }
       }
 
-      await prefs.setStringList(_storageQueueKey, sisaQueue);
+      await prefs.setStringList(_StorageKeys.queue, sisaQueue);
     } catch (_) {
     } finally {
       _sedangSyncLatarBelakang = false;
@@ -509,7 +597,7 @@ if (batchKodeSync.isNotEmpty) {
   }
 
   // ==========================================================
-  // 5. USER INTERFACE
+  // USER INTERFACE
   // ==========================================================
   @override
   Widget build(BuildContext context) {
@@ -629,7 +717,6 @@ if (batchKodeSync.isNotEmpty) {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 2,
             ),
-            // Tombol disable seketika saat proses berjalan untuk mencegah spam klik
             onPressed: (_loading || _isProcessingBungkus) ? null : _prosesBungkusInstan,
             icon: const Icon(Icons.inventory_2_rounded),
             label: Text(
@@ -783,7 +870,10 @@ if (batchKodeSync.isNotEmpty) {
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             const SizedBox(height: 4),
-            const Text("Verifikasi tray terlebih dahulu dari Tab Antrean.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              "Verifikasi tray terlebih dahulu dari Tab Antrean.",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
       );

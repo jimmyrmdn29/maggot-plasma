@@ -1,4 +1,4 @@
-//auth.service.dart
+// auth_service.dart
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,25 +12,86 @@ class AuthService {
   // authStateChanges hanya login/logout, makanya layar verifikasi bisa terkunci.
   Stream<User?> get userStream => _auth.userChanges();
 
-  // LOGIN
+  // ============================================================
+  // LOGIN DENGAN PROTEKSI GHOST USER & FRIENDLY ERROR
+  // ============================================================
   Future<String?> loginEmail(String email, String pass) async {
+    final String cleanEmail = email.trim();
+    final String cleanPass = pass.trim();
+
+    if (cleanEmail.isEmpty || cleanPass.isEmpty) {
+      return "Email dan password wajib diisi.";
+    }
+
     try {
-      await _auth.signInWithEmailAndPassword(email: email, password: pass);
-      return null;
+      final UserCredential cred = await _auth.signInWithEmailAndPassword(
+        email: cleanEmail,
+        password: cleanPass,
+      );
+
+      final User? user = cred.user;
+      if (user == null) {
+        return "Pengguna tidak ditemukan.";
+      }
+
+      // ──────────────────────────────────────────────────────────
+      // PROTEKSI GHOST USER (CEGAH MITRA YANG SUDAH DIHAPUS MASUK)
+      // ──────────────────────────────────────────────────────────
+      final DocumentSnapshot userDoc =
+          await _db.collection('users').doc(user.uid).get();
+
+      if (!userDoc.exists) {
+        // Akun Auth ada di Firebase Auth, tetapi dokumen Firestore sudah
+        // dihapus oleh Admin di page_kelola_mitra. Paksa logout seketika!
+        await _auth.signOut();
+        return "Akun Anda sudah tidak terdaftar atau telah dinonaktifkan oleh Admin.";
+      }
+
+      final Map<String, dynamic>? data = userDoc.data() as Map<String, dynamic>?;
+      if (data == null) {
+        await _auth.signOut();
+        return "Data akun tidak valid. Hubungi Admin.";
+      }
+
+      return null; // Login sukses
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          return "Akun dengan email ini tidak ditemukan.";
+        case 'wrong-password':
+        case 'invalid-credential':
+          return "Email atau password yang Anda masukkan salah.";
+        case 'user-disabled':
+          return "Akun ini telah dinonaktifkan oleh sistem.";
+        case 'too-many-requests':
+          return "Terlalu banyak percobaan gagal. Silakan coba beberapa saat lagi.";
+        case 'invalid-email':
+          return "Format email tidak valid.";
+        case 'network-request-failed':
+          return "Gagal terhubung. Periksa koneksi internet Anda.";
+        default:
+          return "Gagal masuk: ${e.message ?? e.code}";
+      }
+    } on FirebaseException catch (e) {
+      return "Kesalahan database: ${e.message ?? e.code}";
     } catch (e) {
-      return e.toString();
+      return "Terjadi kesalahan tidak terduga: $e";
     }
   }
 
-  // DAFTAR (ditinggalkan: self-register ditutup utk Mitra Kontrak.
-  //  Fungsi ini dipertahankan hanya jika ada kebutuhan khusus nanti.)
+  // ============================================================
+  // DAFTAR (Self-register ditutup utk Mitra Kontrak)
+  // Dipertahankan sesuai aturan backward-compatibility
+  // ============================================================
   Future<String?> registerEmail(String email, String pass, String nama) async {
     try {
-      UserCredential res =
-          await _auth.createUserWithEmailAndPassword(email: email, password: pass);
+      UserCredential res = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: pass.trim(),
+      );
       await _db.collection('users').doc(res.user!.uid).set({
-        'nama': nama,
-        'email': email,
+        'nama': nama.trim(),
+        'email': email.trim(),
         'role': 'mitra',
         'counterTray': 1,
         'siklus': [],
@@ -39,6 +100,14 @@ class AuthService {
       });
       await res.user!.sendEmailVerification();
       return null;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        return "Email sudah terdaftar. Gunakan email lain.";
+      }
+      if (e.code == 'weak-password') {
+        return "Password terlalu lemah. Minimal 6 karakter.";
+      }
+      return e.message ?? e.code;
     } catch (e) {
       return e.toString();
     }
@@ -88,7 +157,7 @@ class AuthService {
       final adminSaatIni = _auth.currentUser;
       if (adminSaatIni == null) return "Admin belum login.";
 
-      // 1. Cek ROLE ADMIN di Firestore (sesuai yang Anda setting di Firebase)
+      // 1. Cek ROLE ADMIN di Firestore (sesuai settingan Firebase Anda)
       final adminDoc =
           await _db.collection('users').doc(adminSaatIni.uid).get();
       final adminData = adminDoc.data();
@@ -127,7 +196,7 @@ class AuthService {
       // 6. Tulis data user ke Firestore (pakai instance UTAMA)
       //    NOTE: Write via instance utama karena Admin (pemilik sesi)
       //    sudah login di instance itu, dan Rules Firestore
-      //    (yang Anda setting di Firebase) akan cek permisi.
+      //    akan memvalidasi permisi secara atomik.
       await _db.collection('users').doc(uidBaru).set({
         'nama': namaMitra.trim(),
         'email': emailMitra.trim(),
@@ -161,7 +230,7 @@ class AuthService {
     } catch (e) {
       return "Terjadi kesalahan: $e";
     } finally {
-      // 7. BERSIHKAN instance kedua (WAJIB, agar tidak menumpuk)
+      // 7. BERSIHKAN instance kedua (WAJIB, agar tidak menumpuk memori)
       try {
         final app = Firebase.app(namaAppSekunder);
         await app.delete();

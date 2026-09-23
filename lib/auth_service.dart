@@ -83,7 +83,7 @@ class AuthService {
   Future<String?> adminBuatAkunMitra(
       String emailMitra, String passwordMitra, String namaMitra) async {
     FirebaseApp? appSekunder;
-    const namaAppSekunder = "MAGFEED_TEMP_CREATE_MITRA";
+    const namaAppSekunder = "MAGG_TEMP_CREATE_MITRA";
     try {
       final adminSaatIni = _auth.currentUser;
       if (adminSaatIni == null) return "Admin belum login.";

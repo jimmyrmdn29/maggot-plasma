@@ -1,12 +1,13 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // ⚙️ KONFIGURASI SEMUA ADA DI: lib/app_config.dart
 //    (ubah reset counter tray, hari auto panen, rasio estimasi, kualitas foto)
-import 'app_config.dart';
 
 // Import File Menu Anda
 import 'auth_service.dart';
@@ -23,11 +24,21 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // AKTIFKAN MODE OFFLINE (PENTING UNTUK KONDISI KANDANG)
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
+
+  // Tangkap semua error Flutter yang gak ke-handle, kirim ke Crashlytics
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+
+  // Tangkap error yang terjadi di luar Flutter framework (misal di isolate lain)
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   runApp(const AplikasiMaggot());
 }
@@ -132,17 +143,33 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
         final List<Widget> halaman = [
           // MENU 1: INPUT DATA
           MenuSatu(
-            nomorTrayOtomatis: userData['counterTray'] ?? 1,
-            namaMitra: userData['nama'] ?? "Mitra",
-            onTambahData: (dataBaru) {
-              dbSiklus.add(dataBaru);
-              FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-                'siklus': dbSiklus,
-                'counterTray': (userData['counterTray'] ?? 1) + 1,
-              });
-            },
-          ),
+  nomorTrayOtomatis: userData['counterTray'] ?? 1,
+  namaMitra: userData['nama'] ?? "Mitra",
+  onTambahBanyakData: (daftarTray) async {
+    final int counterAwal = userData['counterTray'] ?? 1;
+    final List<Map<String, dynamic>> trayBaru = [];
 
+    for (int i = 0; i < daftarTray.length; i++) {
+      final item = daftarTray[i];
+      trayBaru.add({
+        "peternak": userData['nama'] ?? "Mitra",
+        "nama": "Tray ${counterAwal + i}",
+        "beratTelur": item['beratTelur'],
+        "tanggalMulai": item['tanggalMulai'],
+        "cekM1": null,
+        "cekM2": null,
+      });
+    }
+
+    dbSiklus.addAll(trayBaru);
+
+    // SATU write ke Firestore buat semua tray — anti race condition
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      'siklus': dbSiklus,
+      'counterTray': counterAwal + daftarTray.length,
+    });
+  },
+),
           // MENU 2: PANTAU (Logika 0-5, 6-13, 14-20 & Auto Panen/Mati)
           MenuDua(
             daftarSiklus: dbSiklus,
@@ -252,7 +279,7 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("MAGFEED", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text("MAGG", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 Text("Mitra: ${userData['nama']}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
               ],
             ),

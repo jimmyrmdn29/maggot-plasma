@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// 🎛️  KONFIGURASI UTAMA APLIKASI MAGFEED  —  MUDAH DIEDIT
+// 🎛️  KONFIGURASI UTAMA APLIKASI —  MUDAH DIEDIT
 //    Ubah nilai-nilai di bawah sesuai kebutuhan. TIDAK PERLU edit file lain.
 //    Lokasi file ini: lib/app_config.dart
 // ═══════════════════════════════════════════════════════════════════════════

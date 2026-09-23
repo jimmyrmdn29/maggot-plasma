@@ -478,7 +478,10 @@ class _MenuTigaState extends State<MenuTiga>
           }
 
           // Perbarui data dengan URL foto ke Admin Firestore
-          await widget.onBungkusBatch(batch);
+          final String batchKodeSync = batch['batchKode'] ?? '';
+if (batchKodeSync.isNotEmpty) {
+  await widget.onUpdateFotoBatch(batchKodeSync, details);
+}
         } catch (e) {
           debugPrint("Sync tertunda: $e");
           sisaQueue.add(batchRaw);

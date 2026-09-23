@@ -683,7 +683,7 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
                       color: _sortTerbaru ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
                       boxShadow: _sortTerbaru
-                          ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))]
                           : null,
                     ),
                     child: Text(
@@ -711,7 +711,7 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
                       color: !_sortTerbaru ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
                       boxShadow: !_sortTerbaru
-                          ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))]
                           : null,
                     ),
                     child: Text(
@@ -836,7 +836,7 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueGrey.withOpacity(0.08),
+                                    color: Colors.blueGrey.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(5),
                                   ),
                                   child: Text(

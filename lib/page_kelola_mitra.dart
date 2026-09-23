@@ -125,7 +125,13 @@ class _PageKelolaMitraState extends State<PageKelolaMitra> {
                       setDialogState(() => loadingHapus = true);
                       try {
                         // HAPUS HANYA DARI CLOUD FIRESTORE (Gratis & gak butuh Blaze)
-                        await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+                        await FirebaseFirestore.instance.collection('akun_auth_perlu_dihapus').doc(uid).set({
+  'nama': nama,
+  'uid': uid,
+  'dihapusPada': FieldValue.serverTimestamp(),
+});
+
+await FirebaseFirestore.instance.collection('users').doc(uid).delete();
 
                         if (mounted) {
                           Navigator.pop(dialogCtx);
@@ -421,9 +427,9 @@ class _PageKelolaMitraState extends State<PageKelolaMitra> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

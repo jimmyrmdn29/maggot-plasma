@@ -46,7 +46,7 @@ class ProfilTidakDitemukanPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const Text(
-                "Akun login sudah ada, tetapi data MAGFEED di Firestore belum ada. "
+                "Akun login sudah ada, tetapi data MAG di Firestore belum ada. "
                 "Kalau dokumen users dibuat, layar ini akan berganti sendiri. "
                 "Atau keluar lalu daftar ulang.",
                 textAlign: TextAlign.center,

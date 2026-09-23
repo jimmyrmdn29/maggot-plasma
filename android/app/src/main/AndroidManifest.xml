@@ -27,7 +27,7 @@
     </queries>
 
     <application
-        android:label="Magfeed"
+        android:label="MagG"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:requestLegacyExternalStorage="true"> <!-- Tambahan agar bisa baca storage di Android 10 -->

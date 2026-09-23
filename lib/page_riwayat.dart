@@ -838,7 +838,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                                 color: sortTerbaru ? Colors.white : Colors.transparent,
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: sortTerbaru
-                                    ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))]
                                     : null,
                               ),
                               child: Text(
@@ -867,7 +867,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                                 color: !sortTerbaru ? Colors.white : Colors.transparent,
                                 borderRadius: BorderRadius.circular(6),
                                 boxShadow: !sortTerbaru
-                                    ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))]
                                     : null,
                               ),
                               child: Text(
@@ -968,7 +968,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: Colors.blueGrey.withOpacity(0.1),
+                                              color: Colors.blueGrey.withValues(alpha: 0.1),
                                               borderRadius: BorderRadius.circular(5),
                                             ),
                                             child: Text(batchCode, style: const TextStyle(fontWeight: FontWeight.bold)),

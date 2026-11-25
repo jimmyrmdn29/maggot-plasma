@@ -1,90 +1,11 @@
 // menu1.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../backend/tray_draft_service.dart';
 
 // =========================================================================
-// 1. MODEL DATA (Mencegah Salah Ketik Key JSON / Map)
-// =========================================================================
-class _TrayItem {
-  final String beratTelur;
-  final Timestamp tanggalMulai;
-  final String tanggalTampil;
-
-  const _TrayItem({
-    required this.beratTelur,
-    required this.tanggalMulai,
-    required this.tanggalTampil,
-  });
-
-  // Untuk dikirim ke Firestore / Callback
-  Map<String, dynamic> toFirestoreMap() {
-    return {
-      "beratTelur": beratTelur,
-      "tanggalMulai": tanggalMulai,
-      "tanggalTampil": tanggalTampil,
-    };
-  }
-
-  // Untuk disimpan ke Local Storage (SharedPreferences)
-  Map<String, dynamic> toStorageMap() {
-    return {
-      "beratTelur": beratTelur,
-      "tanggalMulaiMs": tanggalMulai.millisecondsSinceEpoch,
-      "tanggalTampil": tanggalTampil,
-    };
-  }
-
-  // Untuk dimuat dari Local Storage
-  factory _TrayItem.fromStorageMap(Map<String, dynamic> map) {
-    return _TrayItem(
-      beratTelur: map["beratTelur"] ?? "0",
-      tanggalMulai: Timestamp.fromMillisecondsSinceEpoch(map["tanggalMulaiMs"] ?? 0),
-      tanggalTampil: map["tanggalTampil"] ?? "-",
-    );
-  }
-}
-
-// =========================================================================
-// 2. SERVICE LOCAL STORAGE (Menangani Draft Tanpa Mengotori UI)
-// =========================================================================
-class _DraftTrayStorage {
-  static const String _storageKey = 'draft_antrean_tray';
-
-  static Future<List<_TrayItem>> loadDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? draftJson = prefs.getString(_storageKey);
-      if (draftJson == null || draftJson.isEmpty) return [];
-
-      final List<dynamic> decoded = json.decode(draftJson);
-      return decoded.map((item) => _TrayItem.fromStorageMap(item)).toList();
-    } catch (e) {
-      debugPrint("Gagal memuat draft tray: $e");
-      return [];
-    }
-  }
-
-  static Future<void> saveDraft(List<_TrayItem> list) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final List<Map<String, dynamic>> toSave = list.map((e) => e.toStorageMap()).toList();
-      await prefs.setString(_storageKey, json.encode(toSave));
-    } catch (_) {}
-  }
-
-  static Future<void> clearDraft() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_storageKey);
-    } catch (_) {}
-  }
-}
-
-// =========================================================================
-// 3. WIDGET UTAMA (MENU SATU)
+// WIDGET UTAMA (MENU SATU)
 // =========================================================================
 class MenuSatu extends StatefulWidget {
   final int nomorTrayOtomatis;
@@ -104,7 +25,7 @@ class MenuSatu extends StatefulWidget {
 
 class _MenuSatuState extends State<MenuSatu> {
   final TextEditingController _beratCtrl = TextEditingController();
-  final List<_TrayItem> _antreanTray = [];
+  final List<TrayItem> _antreanTray = [];
   
   DateTime _tglTerpilih = DateTime.now();
   bool _isSubmitting = false;
@@ -122,7 +43,7 @@ class _MenuSatuState extends State<MenuSatu> {
   }
 
   Future<void> _inisialisasiDraft() async {
-    final list = await _DraftTrayStorage.loadDraft();
+    final list = await DraftTrayStorage.loadDraft();
     if (mounted) {
       setState(() {
         _antreanTray.clear();
@@ -155,7 +76,7 @@ class _MenuSatuState extends State<MenuSatu> {
 
     setState(() {
       _antreanTray.add(
-        _TrayItem(
+        TrayItem(
           beratTelur: beratText,
           tanggalMulai: Timestamp.fromDate(_tglTerpilih),
           tanggalTampil: DateFormat('dd MMM yyyy').format(_tglTerpilih),
@@ -164,7 +85,7 @@ class _MenuSatuState extends State<MenuSatu> {
       _beratCtrl.clear();
     });
 
-    _DraftTrayStorage.saveDraft(_antreanTray);
+    DraftTrayStorage.saveDraft(_antreanTray);
     FocusScope.of(context).unfocus();
   }
 
@@ -172,7 +93,7 @@ class _MenuSatuState extends State<MenuSatu> {
     setState(() {
       _antreanTray.removeAt(index);
     });
-    _DraftTrayStorage.saveDraft(_antreanTray);
+    DraftTrayStorage.saveDraft(_antreanTray);
   }
 
   Future<void> _simpanSemuaData() async {
@@ -192,7 +113,7 @@ class _MenuSatuState extends State<MenuSatu> {
       if (mounted) {
         final int jumlah = _antreanTray.length;
         setState(() => _antreanTray.clear());
-        await _DraftTrayStorage.clearDraft();
+        await DraftTrayStorage.clearDraft();
 
         _showSnackbar("✅ $jumlah Tray Berhasil Disimpan!");
       }

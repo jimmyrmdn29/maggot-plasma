@@ -1,6 +1,6 @@
 // login_page.dart
 import 'package:flutter/material.dart';
-import 'auth_service.dart';
+import '../backend/auth_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CATATAN PENTING (UNTUK MITRA KONTRAK):

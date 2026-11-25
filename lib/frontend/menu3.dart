@@ -7,54 +7,11 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:path_provider/path_provider.dart';
+import '../backend/panen_storage_service.dart';
 
 // =========================================================================
-// 1. SERVICE LAYER (Menangani Upload Cloudinary secara Terisolasi & Bersih)
-// =========================================================================
-class _CloudinaryPanenService {
-  static const String cloudName = 'lvtcqo9v';
-  static const String uploadPreset = 'preset_panen';
-  static const String folderName = 'panen_maggot';
-
-  final CloudinaryPublic _client = CloudinaryPublic(
-    cloudName,
-    uploadPreset,
-    cache: false,
-  );
-
-  Future<String?> uploadFoto(String localPath) async {
-    try {
-      final file = File(localPath);
-      if (!await file.exists()) return null;
-
-      final CloudinaryResponse res = await _client.uploadFile(
-        CloudinaryFile.fromFile(
-          localPath,
-          resourceType: CloudinaryResourceType.Image,
-          folder: folderName,
-        ),
-      );
-      return res.secureUrl;
-    } catch (e) {
-      debugPrint("Gagal upload Cloudinary: $e");
-      return null;
-    }
-  }
-}
-
-// =========================================================================
-// 2. KONSTANTA PENYIMPANAN LOKAL
-// =========================================================================
-abstract class _StorageKeys {
-  static const String draft = 'DRAFT_PANEN_TEMPORER_MAGGOT';
-  static const String queue = 'ANTREAN_SYNC_LATAR_BELAKANG_MAGGOT';
-  static const String trayDibungkus = 'LIST_TRAY_SELESAI_DIBUNGKUS_MAGGOT';
-}
-
-// =========================================================================
-// 3. WIDGET UTAMA (MENU TIGA)
+// WIDGET UTAMA (MENU TIGA)
 // =========================================================================
 class MenuTiga extends StatefulWidget {
   final List<Map<String, dynamic>> daftarPanen;
@@ -62,8 +19,8 @@ class MenuTiga extends StatefulWidget {
   final Future<void> Function(String batchKode, List<dynamic> detailTrays) onUpdateFotoBatch;
 
   // Tetap disediakan jika file lain masih merujuk ke konstanta ini
-  static const String cloudName = _CloudinaryPanenService.cloudName;
-  static const String uploadPreset = _CloudinaryPanenService.uploadPreset;
+  static const String cloudName = CloudinaryPanenService.cloudName;
+  static const String uploadPreset = CloudinaryPanenService.uploadPreset;
 
   const MenuTiga({
     super.key,
@@ -89,7 +46,7 @@ class _MenuTigaState extends State<MenuTiga>
 
   late final TabController _tabController;
   final ImagePicker _picker = ImagePicker();
-  final _CloudinaryPanenService _cloudinaryService = _CloudinaryPanenService();
+  final CloudinaryPanenService _cloudinaryService = CloudinaryPanenService();
 
   static bool _sedangSyncLatarBelakang = false;
 
@@ -124,12 +81,12 @@ class _MenuTigaState extends State<MenuTiga>
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      final List<String>? listDibungkus = prefs.getStringList(_StorageKeys.trayDibungkus);
+      final List<String>? listDibungkus = prefs.getStringList(StorageKeys.trayDibungkus);
       if (listDibungkus != null) {
         _trayTelahDibungkus = listDibungkus.toSet();
       }
 
-      final String? draftJson = prefs.getString(_StorageKeys.draft);
+      final String? draftJson = prefs.getString(StorageKeys.draft);
       if (draftJson != null && draftJson.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(draftJson);
         _kantongRahasia = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -145,14 +102,14 @@ class _MenuTigaState extends State<MenuTiga>
     try {
       final prefs = await SharedPreferences.getInstance();
       final String jsonStr = jsonEncode(_kantongRahasia, toEncodable: _customJsonSerializer);
-      await prefs.setString(_StorageKeys.draft, jsonStr);
+      await prefs.setString(StorageKeys.draft, jsonStr);
     } catch (_) {}
   }
 
   Future<void> _hapusDraftDariDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_StorageKeys.draft);
+      await prefs.remove(StorageKeys.draft);
     } catch (_) {}
   }
 
@@ -483,13 +440,13 @@ class _MenuTigaState extends State<MenuTiga>
       for (var item in _kantongRahasia) {
         _trayTelahDibungkus.add(item['nama'].toString());
       }
-      await prefs.setStringList(_StorageKeys.trayDibungkus, _trayTelahDibungkus.toList());
+      await prefs.setStringList(StorageKeys.trayDibungkus, _trayTelahDibungkus.toList());
 
       await widget.onBungkusBatch(paketBatch);
 
-      final List<String> queue = prefs.getStringList(_StorageKeys.queue) ?? [];
+      final List<String> queue = prefs.getStringList(StorageKeys.queue) ?? [];
       queue.add(jsonEncode(paketBatch, toEncodable: _customJsonSerializer));
-      await prefs.setStringList(_StorageKeys.queue, queue);
+      await prefs.setStringList(StorageKeys.queue, queue);
 
       _kantongRahasia.clear();
       await _hapusDraftDariDisk();
@@ -517,7 +474,7 @@ class _MenuTigaState extends State<MenuTiga>
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      List<String> queue = prefs.getStringList(_StorageKeys.queue) ?? [];
+      List<String> queue = prefs.getStringList(StorageKeys.queue) ?? [];
       if (queue.isEmpty) {
         _sedangSyncLatarBelakang = false;
         return;
@@ -576,7 +533,7 @@ class _MenuTigaState extends State<MenuTiga>
         }
       }
 
-      await prefs.setStringList(_StorageKeys.queue, sisaQueue);
+      await prefs.setStringList(StorageKeys.queue, sisaQueue);
     } catch (_) {
     } finally {
       _sedangSyncLatarBelakang = false;

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'page_estimasi.dart';
 import 'page_riwayat.dart';
 import 'page_kelola_mitra.dart';
-import 'auth_service.dart';
+import 'page_kelola_artikel.dart';import '../backend/auth_service.dart';
 
 class DashboardAdminWeb extends StatefulWidget {
   const DashboardAdminWeb({super.key});
@@ -140,6 +140,12 @@ class _DashboardAdminWebState extends State<DashboardAdminWeb> {
                   active: indexMenu == 2,
                   onTap: () => setState(() => indexMenu = 2),
                 ),
+                _buildTabItem(
+                  label: "KELOLA ARTIKEL",
+                  icon: Icons.article_rounded,
+                  active: indexMenu == 3,
+                  onTap: () => setState(() => indexMenu = 3),
+                ),
               ],
             ),
           ),
@@ -152,6 +158,7 @@ class _DashboardAdminWebState extends State<DashboardAdminWeb> {
                 PageEstimasi(),
                 PageRiwayat(),
                 PageKelolaMitra(),
+                PageKelolaArtikel(),
               ],
             ),
           ),

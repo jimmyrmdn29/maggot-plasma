@@ -1,38 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'app_config.dart'; // ⚙️ HARI_AUTO_PANEN & konfigurasi lain
+import '../backend/app_config.dart'; // ⚙️ HARI_AUTO_PANEN & konfigurasi lain
+import '../backend/fase_maggot_helper.dart';
 
 // =========================================================================
-// 1. HELPER FASE MAGGOT (Memisahkan Logika Gambar & Umur dari UI)
-// =========================================================================
-class _FaseMaggotHelper {
-  final String label;
-  final String pathGambar;
-
-  const _FaseMaggotHelper({required this.label, required this.pathGambar});
-
-  factory _FaseMaggotHelper.dariUmur(int hari) {
-    if (hari <= 5) {
-      return const _FaseMaggotHelper(
-        label: "TELUR",
-        pathGambar: "assets/images/telur.png",
-      );
-    } else if (hari <= 13) {
-      return const _FaseMaggotHelper(
-        label: "BABY",
-        pathGambar: "assets/images/baby_maggot.png",
-      );
-    } else {
-      return const _FaseMaggotHelper(
-        label: "MAGGOT LAPAR",
-        pathGambar: "assets/images/maggot_lapar.png",
-      );
-    }
-  }
-}
-
-// =========================================================================
-// 2. WIDGET UTAMA (MENU DUA)
+// WIDGET UTAMA (MENU DUA)
 // =========================================================================
 class MenuDua extends StatefulWidget {
   final List<Map<String, dynamic>> daftarSiklus;
@@ -129,7 +101,7 @@ class _KartuSiklus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fase = _FaseMaggotHelper.dariUmur(hari);
+    final fase = FaseMaggotHelper.dariUmur(hari);
 
     final bool isWaktunyaM1 = (hari >= 7 && hari < 14 && data['cekM1'] == null);
     final bool isWaktunyaM2 = (hari >= 14 && hari < 21 && data['cekM2'] == null);

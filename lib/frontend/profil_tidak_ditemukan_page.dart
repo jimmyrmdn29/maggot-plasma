@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'auth_service.dart';
+import '../backend/auth_service.dart';
 
 class ProfilTidakDitemukanPage extends StatefulWidget {
   const ProfilTidakDitemukanPage({super.key});

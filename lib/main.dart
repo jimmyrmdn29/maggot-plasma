@@ -4,19 +4,20 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'firebase_options.dart';
+import 'backend/firebase_options.dart';
+import 'backend/auth_service.dart';
+import 'backend/maggot_repository.dart';
 
 // Import File Menu & Halaman
-import 'auth_service.dart';
-import 'login_page.dart';
-import 'email_verification_page.dart';
-import 'profil_tidak_ditemukan_page.dart';
-import 'dashboard_admin_web.dart';
-import 'menu1.dart';
-import 'menu2.dart';
-import 'menu3.dart';
-import 'menu4.dart';
-
+import 'frontend/login_page.dart';
+import 'frontend/email_verification_page.dart';
+import 'frontend/profil_tidak_ditemukan_page.dart';
+import 'frontend/dashboard_admin_web.dart';
+import 'frontend/menu1.dart';
+import 'frontend/menu2.dart';
+import 'frontend/menu3.dart';
+import 'frontend/menu4.dart';
+import 'frontend/page_artikel.dart';
 // =========================================================================
 // 1. ENTRY POINT & INITIALIZATION
 // =========================================================================
@@ -139,7 +140,7 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
           MenuSatu(
             nomorTrayOtomatis: userData['counterTray'] ?? 1,
             namaMitra: userData['nama'] ?? "Mitra",
-            onTambahBanyakData: (daftarTray) => _MaggotRepository.tambahBanyakTray(
+            onTambahBanyakData: (daftarTray) => MaggotRepository.tambahBanyakTray(
               uid: user.uid,
               namaMitra: userData['nama'] ?? "Mitra",
               counterAwal: userData['counterTray'] ?? 1,
@@ -149,20 +150,20 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
           ),
           MenuDua(
             daftarSiklus: dbSiklus,
-            onKonfirmasiSehat: (index, minggu) => _MaggotRepository.konfirmasiSehat(
+            onKonfirmasiSehat: (index, minggu) => MaggotRepository.konfirmasiSehat(
               uid: user.uid,
               dbSiklus: dbSiklus,
               index: index,
               minggu: minggu,
             ),
-            onPanenOtomatis: (index, dataPanen) => _MaggotRepository.pindahkanKePanen(
+            onPanenOtomatis: (index, dataPanen) => MaggotRepository.pindahkanKePanen(
               uid: user.uid,
               dbSiklus: dbSiklus,
               dbPanen: dbPanen,
               index: index,
               dataBaru: dataPanen,
             ),
-            onGagalKePanen: (index, dataGagal) => _MaggotRepository.pindahkanKePanen(
+            onGagalKePanen: (index, dataGagal) => MaggotRepository.pindahkanKePanen(
               uid: user.uid,
               dbSiklus: dbSiklus,
               dbPanen: dbPanen,
@@ -172,12 +173,12 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
           ),
           MenuTiga(
             daftarPanen: dbPanen,
-            onBungkusBatch: (paketBatch) => _MaggotRepository.bungkusBatch(
+            onBungkusBatch: (paketBatch) => MaggotRepository.bungkusBatch(
               uid: user.uid,
               paketBatch: paketBatch,
               dbPanenLama: dbPanen,
             ),
-            onUpdateFotoBatch: (batchKode, detailTrays) => _MaggotRepository.updateFotoBatch(
+            onUpdateFotoBatch: (batchKode, detailTrays) => MaggotRepository.updateFotoBatch(
               uid: user.uid,
               batchKode: batchKode,
               detailTraysTerbaru: detailTrays,
@@ -185,12 +186,13 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
           ),
           MenuEmpat(
             daftarBatch: dbBatch,
-            onHapusBatchManual: (index) => _MaggotRepository.hapusBatchManual(
+            onHapusBatchManual: (index) => MaggotRepository.hapusBatchManual(
               uid: user.uid,
               dbBatch: dbBatch,
               index: index,
             ),
           ),
+          const PageArtikel(),
         ];
 
         return Scaffold(
@@ -226,6 +228,7 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
               BottomNavigationBarItem(icon: Icon(Icons.analytics_outlined), label: 'Pantau'),
               BottomNavigationBarItem(icon: Icon(Icons.camera_alt_outlined), label: 'Lapor'),
               BottomNavigationBarItem(icon: Icon(Icons.history_toggle_off), label: 'Riwayat'),
+              BottomNavigationBarItem(icon: Icon(Icons.article_outlined), label: 'Artikel'),
             ],
           ),
         );
@@ -235,131 +238,7 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
 }
 
 // =========================================================================
-// 4. REPOSITORY LAYER (Pusat Transaksi & Operasi Firestore)
-// =========================================================================
-class _MaggotRepository {
-  static final FirebaseFirestore _db = FirebaseFirestore.instance;
-
-  // Menu 1: Tambah Banyak Tray Sekaligus
-  static Future<void> tambahBanyakTray({
-    required String uid,
-    required String namaMitra,
-    required int counterAwal,
-    required List<Map<String, dynamic>> daftarTrayBaru,
-    required List<Map<String, dynamic>> dbSiklusLama,
-  }) async {
-    final List<Map<String, dynamic>> hasilBaru = [];
-
-    for (int i = 0; i < daftarTrayBaru.length; i++) {
-      final item = daftarTrayBaru[i];
-      hasilBaru.add({
-        "peternak": namaMitra,
-        "nama": "Tray ${counterAwal + i}",
-        "beratTelur": item['beratTelur'],
-        "tanggalMulai": item['tanggalMulai'],
-        "cekM1": null,
-        "cekM2": null,
-      });
-    }
-
-    dbSiklusLama.addAll(hasilBaru);
-
-    await _db.collection('users').doc(uid).update({
-      'siklus': dbSiklusLama,
-      'counterTray': counterAwal + daftarTrayBaru.length,
-    });
-  }
-
-  // Menu 2: Verifikasi Sehat M1/M2
-  static Future<void> konfirmasiSehat({
-    required String uid,
-    required List<Map<String, dynamic>> dbSiklus,
-    required int index,
-    required int minggu,
-  }) async {
-    dbSiklus[index]['cekM$minggu'] = DateTime.now().toIso8601String();
-    await _db.collection('users').doc(uid).update({'siklus': dbSiklus});
-  }
-
-  // Menu 2: Pindah dari Siklus ke Panen
-  static Future<void> pindahkanKePanen({
-    required String uid,
-    required List<Map<String, dynamic>> dbSiklus,
-    required List<Map<String, dynamic>> dbPanen,
-    required int index,
-    required Map<String, dynamic> dataBaru,
-  }) async {
-    dbPanen.add(dataBaru);
-    dbSiklus.removeAt(index);
-    await _db.collection('users').doc(uid).update({
-      'siklus': dbSiklus,
-      'panen': dbPanen,
-    });
-  }
-
-  // Menu 3: Bungkus Batch Atomik (Sub-koleksi + Ringkasan Ringan)
-  static Future<void> bungkusBatch({
-    required String uid,
-    required Map<String, dynamic> paketBatch,
-    required List<Map<String, dynamic>> dbPanenLama,
-  }) async {
-    final List<dynamic> detailTrays = paketBatch['detailTrays'] ?? [];
-    final Set<String> namaTraySelesai = detailTrays.map((t) => t['nama'].toString()).toSet();
-
-    final sisaPanen = dbPanenLama.where((item) => !namaTraySelesai.contains(item['nama'].toString())).toList();
-    final String batchKode = paketBatch['batchKode'] ?? "BATCH-${DateTime.now().millisecondsSinceEpoch}";
-
-    final batchWrite = _db.batch();
-
-    // 1. Simpan detail penuh ke Sub-koleksi
-    final docBatchRef = _db.collection('users').doc(uid).collection('batches').doc(batchKode);
-    batchWrite.set(docBatchRef, paketBatch);
-
-    // 2. Buat ringkasan ringan untuk Menu 4 (Anti limit 1MB Firestore)
-    final ringkasanMenuEmpat = {
-      'batchKode': batchKode,
-      'tanggalBungkus': paketBatch['tanggalBungkus'],
-      'tanggalFormatted': paketBatch['tanggalFormatted'],
-      'totalBeratKg': paketBatch['totalBeratKg'],
-      'jumlahTray': paketBatch['jumlahTray'],
-      'status': paketBatch['status'],
-      'daftarNamaTray': detailTrays.map((e) => e['nama']).toList(),
-    };
-
-    // 3. Simpan ke Dokumen Utama
-    final docUserRef = _db.collection('users').doc(uid);
-    batchWrite.update(docUserRef, {
-      'panen': sisaPanen,
-      'batch': FieldValue.arrayUnion([ringkasanMenuEmpat]),
-    });
-
-    await batchWrite.commit();
-  }
-
-  // Menu 3: Update URL Foto Cloudinary ke Sub-koleksi Batches
-  static Future<void> updateFotoBatch({
-    required String uid,
-    required String batchKode,
-    required List<dynamic> detailTraysTerbaru,
-  }) async {
-    await _db.collection('users').doc(uid).collection('batches').doc(batchKode).update({
-      'detailTrays': detailTraysTerbaru,
-    });
-  }
-
-  // Menu 4: Hapus Batch Manual
-  static Future<void> hapusBatchManual({
-    required String uid,
-    required List<Map<String, dynamic>> dbBatch,
-    required int index,
-  }) async {
-    dbBatch.removeAt(index);
-    await _db.collection('users').doc(uid).update({'batch': dbBatch});
-  }
-}
-
-// =========================================================================
-// 5. HELPER WIDGET
+// 4. HELPER WIDGET
 // =========================================================================
 class _LoadingScreen extends StatelessWidget {
   const _LoadingScreen();

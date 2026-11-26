@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ============================================================
+    // PERINGATAN
+    // ============================================================
+    // File ini belum berisi aturan lengkap untuk koleksi lain.
+    // Sebelum deploy, tempel aturan yang sekarang aktif di
+    // Firebase Console (Firestore -> Rules) di bawah ini.
+    //
+    // Jangan deploy file ini apa adanya jika aturan lama belum
+    // digabungkan, karena koleksi selain "artikel" bisa terblokir.
+    // ============================================================
+
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /artikel/{artikelId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

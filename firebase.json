@@ -9,7 +9,7 @@
         }
       },
       "dart": {
-        "lib/firebase_options.dart": {
+        "lib/backend/firebase_options.dart": {
           "projectId": "maggot-plasma",
           "configurations": {
             "android": "1:407684585418:android:86d7af33ffe2a9f969a133",
@@ -23,6 +23,7 @@
     }
   },
   "hosting": {
+    "site": "maggot-plasma",
     "public": "build/web",
     "ignore": [
       "firebase.json",
@@ -49,5 +50,8 @@
         "*.local"
       ]
     }
-  ]
+  ],
+  "firestore": {
+    "rules": "firestore.rules"
+  }
 }

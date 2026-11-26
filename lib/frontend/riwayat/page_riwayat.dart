@@ -1,19 +1,14 @@
-// page_riwayat.dart
+﻿// page_riwayat.dart
 import 'dart:async';
-import 'dart:io';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:excel/excel.dart' as excel_pkg;
 import 'package:intl/intl.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../backend/riwayat/rincian_tray.dart';
 import '../../backend/riwayat/data_batch.dart';
 import '../../backend/riwayat/pembaca_riwayat.dart';
-import '../../backend/riwayat/pembuat_laporan_riwayat.dart';
+import 'riwayat_controller.dart';
 import 'theme_riwayat.dart';
 import 'widget/tampilan_toolbar_riwayat.dart';
 import 'widget/tampilan_tabel_riwayat.dart';
@@ -31,143 +26,36 @@ class PageRiwayat extends StatefulWidget {
 }
 
 class _PageRiwayatState extends State<PageRiwayat> {
-  final TextEditingController _searchController = TextEditingController();
-  late final Stream<QuerySnapshot> _usersStream;
-
-  String cariMitra = "";
-  DateTimeRange? selectedRange;
-  bool sortTerbaru = true;
-
-  final Set<String> _downloadingBatches = {};
-
-  int _lastDocHash = 0;
-  List<DataBatch> _cachedMasterList = [];
-
-  int _halamanAktif = 1;
-  int _barisPerHalaman = 10;
-  final List<int> _opsiBaris = [10, 25, 50];
+  late final RiwayatController _controller;
 
   @override
   void initState() {
     super.initState();
-    // Menggunakan stream eksisting Anda, tanpa perlu ubah database!
-    _usersStream = FirebaseFirestore.instance.collection('users').snapshots();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _terapkanRentangBaru(DateTimeRange range) {
-    setState(() {
-      selectedRange = range;
-      _halamanAktif = 1;
-    });
-  }
-
-  Future<List<RincianTray>> _ambilDetailTrays(DataBatch batch) async {
-    if (batch.detailTrays.isNotEmpty) {
-      return batch.detailTrays;
-    }
-
-    // Cek jika tersimpan di sub-koleksi
-    try {
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(batch.userId)
-          .collection('batches')
-          .doc(batch.batchKode)
-          .get();
-
-      if (docSnapshot.exists && docSnapshot.data() != null) {
-        final dynamic rawList = docSnapshot.data()!['detailTrays'];
-        if (rawList is List) {
-          return rawList
-              .whereType<Map<String, dynamic>>()
-              .map((m) => RincianTray.fromMap(m))
-              .toList();
-        }
-      }
-    } catch (_) {}
-
-    return [];
-  }
-
-  Future<void> _exportSingleBatchToExcel(DataBatch batch) async {
-    final String kodeBatch = batch.batchKode;
-    if (_downloadingBatches.contains(kodeBatch)) return;
-
-    setState(() {
-      _downloadingBatches.add(kodeBatch);
-    });
-
-    try {
-      final List<RincianTray> detailTrays = await _ambilDetailTrays(batch);
-
-      final Map<String, dynamic> params = {
-        'batch': {
-          'batchKode': batch.batchKode,
-          'mitra': batch.mitra,
-          'tglBungkus': batch.tglBungkus,
-          'totalBerat': batch.totalBerat,
-          'status': batch.status,
-        },
-        'detailTrays': detailTrays.map((t) => t.toMap()).toList(),
-      };
-
-      Uint8List? fileBytes;
-
-      if (kIsWeb) {
-        await Future.delayed(const Duration(milliseconds: 40));
-        fileBytes = PembuatLaporanRiwayat.generateExcelBytes(params);
-      } else {
-        fileBytes = await compute(PembuatLaporanRiwayat.generateExcelBytes, params);
-      }
-
-      if (fileBytes == null) throw Exception("Format Excel gagal dibuat.");
-
-      final String namaFileExcel = "Batch_${batch.batchKode.replaceAll(RegExp(r'[^\w\s]+'), '_')}.xlsx";
-
-      if (kIsWeb) {
-        final excel = excel_pkg.Excel.decodeBytes(fileBytes);
-        excel.save(fileName: namaFileExcel);
-      } else {
-        final Directory appDir = await getApplicationDocumentsDirectory();
-        final String pathExcel = '${appDir.path}/$namaFileExcel';
-        final File file = File(pathExcel);
-        await file.writeAsBytes(fileBytes, flush: true);
-        await OpenFilex.open(pathExcel);
-      }
-
-      if (mounted) {
+    _controller = RiwayatController(
+      onSnackbar: (msg, {isError = false, color}) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Berhasil mengunduh $namaFileExcel"),
-            backgroundColor: TemaRiwayat.success,
+            content: Text(msg),
+            backgroundColor: isError ? Colors.red[700] : (color ?? TemaRiwayat.success),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
           ),
         );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Gagal unduh: $e"),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _downloadingBatches.remove(kodeBatch);
-        });
-      }
-    }
+      },
+    );
+    _controller.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onChanged);
+    _controller.dispose();
+    super.dispose();
   }
 
   // ==========================================================================
@@ -175,8 +63,8 @@ class _PageRiwayatState extends State<PageRiwayat> {
   // ==========================================================================
   Future<void> _bukaFilterTanggalCepat(BuildContext context) async {
     final now = DateTime.now();
-    DateTime tempStart = selectedRange?.start ?? now.subtract(const Duration(days: 7));
-    DateTime tempEnd = selectedRange?.end ?? now;
+    DateTime tempStart = _controller.selectedRange?.start ?? now.subtract(const Duration(days: 7));
+    DateTime tempEnd = _controller.selectedRange?.end ?? now;
 
     await showDialog(
       context: context,
@@ -217,25 +105,25 @@ class _PageRiwayatState extends State<PageRiwayat> {
                       children: [
                         _buildPresetChip("Hari Ini", () {
                           final today = DateTime(now.year, now.month, now.day);
-                          _terapkanRentangBaru(DateTimeRange(start: today, end: today));
+                          _controller.terapkanRentangBaru(DateTimeRange(start: today, end: today));
                           Navigator.pop(ctx);
                         }),
                         _buildPresetChip("7 Hari Terakhir", () {
                           final start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
                           final end = DateTime(now.year, now.month, now.day);
-                          _terapkanRentangBaru(DateTimeRange(start: start, end: end));
+                          _controller.terapkanRentangBaru(DateTimeRange(start: start, end: end));
                           Navigator.pop(ctx);
                         }),
                         _buildPresetChip("Bulan Ini", () {
                           final start = DateTime(now.year, now.month, 1);
                           final end = DateTime(now.year, now.month + 1, 0);
-                          _terapkanRentangBaru(DateTimeRange(start: start, end: end));
+                          _controller.terapkanRentangBaru(DateTimeRange(start: start, end: end));
                           Navigator.pop(ctx);
                         }),
                         _buildPresetChip("Bulan Lalu", () {
                           final start = DateTime(now.year, now.month - 1, 1);
                           final end = DateTime(now.year, now.month, 0);
-                          _terapkanRentangBaru(DateTimeRange(start: start, end: end));
+                          _controller.terapkanRentangBaru(DateTimeRange(start: start, end: end));
                           Navigator.pop(ctx);
                         }),
                       ],
@@ -345,7 +233,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: () {
-                          _terapkanRentangBaru(DateTimeRange(start: tempStart, end: tempEnd));
+                          _controller.terapkanRentangBaru(DateTimeRange(start: tempStart, end: tempEnd));
                           Navigator.pop(ctx);
                         },
                         child: const Text("TERAPKAN TANGGAL", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -381,7 +269,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
 
-    final List<RincianTray> detail = await _ambilDetailTrays(batch);
+    final List<RincianTray> detail = await _controller.ambilDetailTrays(batch);
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -475,9 +363,9 @@ class _PageRiwayatState extends State<PageRiwayat> {
                                     ),
                                   ),
                                   const SizedBox(height: 2),
-                                  Text("📍 GPS: ${t.gps}", style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                                  Text("GPS: ${t.gps}", style: const TextStyle(fontSize: 11, color: Colors.black87)),
                                   Text(
-                                    "🗓️ Mulai: ${t.tglMulaiFormatted} | Panen: ${t.tanggalPanen}",
+                                    "Mulai: ${t.tglMulaiFormatted} | Panen: ${t.tanggalPanen}",
                                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                                   ),
                                 ],
@@ -566,9 +454,9 @@ class _PageRiwayatState extends State<PageRiwayat> {
     return Scaffold(
       backgroundColor: TemaRiwayat.background,
       body: StreamBuilder<QuerySnapshot>(
-        stream: _usersStream,
+        stream: _controller.usersStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && _cachedMasterList.isEmpty) {
+          if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -576,84 +464,36 @@ class _PageRiwayatState extends State<PageRiwayat> {
             return Center(child: Text("Terjadi kesalahan: ${snapshot.error}"));
           }
 
-          // Caching hash-based agar tidak re-parse jika data Firestore tidak berubah
-          if (snapshot.hasData) {
-            final docs = snapshot.data!.docs;
-            final int currentHash = Object.hashAll(docs.map((d) => d.id));
-            if (_lastDocHash != currentHash) {
-              _lastDocHash = currentHash;
-              _cachedMasterList = PembacaRiwayat.parseFirestoreDocs(docs);
-            }
-          }
+          _controller.parseMasterList(snapshot.data?.docs ?? []);
 
-          final query = cariMitra.toLowerCase().trim();
-
-          final filtered = _cachedMasterList.where((item) {
-            final bool matchNama = query.isEmpty ||
-                item.mitra.toLowerCase().contains(query) ||
-                item.batchKode.toLowerCase().contains(query);
-
-            bool matchTgl = true;
-            if (selectedRange != null) {
-              final DateTime d = item.tglObj;
-              final DateTime itemDate = DateTime(d.year, d.month, d.day);
-              final DateTime start = DateTime(selectedRange!.start.year, selectedRange!.start.month, selectedRange!.start.day);
-              final DateTime end = DateTime(selectedRange!.end.year, selectedRange!.end.month, selectedRange!.end.day);
-
-              matchTgl = !itemDate.isBefore(start) && !itemDate.isAfter(end);
-            }
-
-            return matchNama && matchTgl;
-          }).toList();
-
-          filtered.sort((a, b) {
-            return sortTerbaru ? b.tglObj.compareTo(a.tglObj) : a.tglObj.compareTo(b.tglObj);
-          });
-
-          final int totalData = filtered.length;
-          final int totalHalaman = totalData == 0 ? 1 : (totalData / _barisPerHalaman).ceil();
-
-          if (_halamanAktif > totalHalaman) _halamanAktif = totalHalaman;
-          if (_halamanAktif < 1) _halamanAktif = 1;
-
-          final int startIndex = (totalData == 0) ? 0 : (_halamanAktif - 1) * _barisPerHalaman;
-          final int endIndex = min(startIndex + _barisPerHalaman, totalData);
-          final List<DataBatch> dataHalamanIni =
-              (totalData == 0) ? [] : filtered.sublist(startIndex, endIndex);
+          final totalData = _controller.totalData;
+          final totalHalaman = _controller.totalHalaman;
+          final startIndex = _controller.startIndex;
+          final endIndex = _controller.endIndex;
+          final dataHalamanIni = _controller.dataHalamanIni;
 
           return Column(
             children: [
               TampilanToolbarRiwayat(
-                controller: _searchController,
+                controller: _controller.searchController,
                 onCariChanged: (v) {
-                  setState(() {
-                    cariMitra = v;
-                    _halamanAktif = 1;
-                  });
+                  _controller.onSearchChanged(v);
                 },
-                sortTerbaru: sortTerbaru,
+                sortTerbaru: _controller.sortTerbaru,
                 onSortChange: (v) {
-                  setState(() {
-                    sortTerbaru = v;
-                    _halamanAktif = 1;
-                  });
+                  _controller.onSortChange(v);
                 },
-                selectedRange: selectedRange,
+                selectedRange: _controller.selectedRange,
                 onBukaFilterTanggal: () => _bukaFilterTanggalCepat(context),
-                onHapusFilterTanggal: () {
-                  setState(() {
-                    selectedRange = null;
-                    _halamanAktif = 1;
-                  });
-                },
+                onHapusFilterTanggal: () => _controller.hapusFilterTanggal(),
               ),
               const Divider(height: 1, thickness: 1),
               Expanded(
                 child: TampilanTabelRiwayat(
                   dataHalamanIni: dataHalamanIni,
-                  downloadingBatches: _downloadingBatches,
+                  downloadingBatches: _controller.downloadingBatches,
                   onLihatDetail: (item) => _tampilkanDetailTrayDialog(item),
-                  onUnduhBatch: (item) => _exportSingleBatchToExcel(item),
+                  onUnduhBatch: (item) => _controller.exportSingleBatchToExcel(item),
                 ),
               ),
               const Divider(height: 1, thickness: 1),
@@ -662,23 +502,14 @@ class _PageRiwayatState extends State<PageRiwayat> {
                 totalHalaman: totalHalaman,
                 startIndex: startIndex,
                 endIndex: endIndex,
-                halamanAktif: _halamanAktif,
-                barisPerHalaman: _barisPerHalaman,
-                opsiBaris: _opsiBaris,
-                onHalamanChange: (page) {
-                  setState(() {
-                    _halamanAktif = page;
-                  });
-                },
-                onBarisChange: (val) {
-                  setState(() {
-                    _barisPerHalaman = val;
-                    _halamanAktif = 1;
-                  });
-                },
+                halamanAktif: _controller.halamanAktif,
+                barisPerHalaman: _controller.barisPerHalaman,
+                opsiBaris: RiwayatController.opsiBaris,
+                onHalamanChange: (page) => _controller.onHalamanChange(page),
+                onBarisChange: (val) => _controller.onBarisChange(val),
               ),
               const Divider(height: 1, thickness: 1),
-              TampilanFooterRiwayat(data: filtered),
+              TampilanFooterRiwayat(data: _controller.filtered),
             ],
           );
         },

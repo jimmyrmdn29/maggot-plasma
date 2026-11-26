@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'backend/auth_service.dart';
+import 'backend/auth/autentikasi_pengguna.dart';
 import 'frontend/auth/router_pengguna.dart';
 import 'frontend/login_page.dart';
 import 'frontend/widget/loading_screen.dart';
@@ -19,7 +19,7 @@ class AplikasiMaggot extends StatelessWidget {
         fontFamily: 'Roboto',
       ),
       home: StreamBuilder<User?>(
-        stream: AuthService().userStream,
+        stream: AutentikasiPengguna().userStream,
         builder: (context, authSnapshot) {
           if (authSnapshot.connectionState == ConnectionState.waiting) {
             return const LoadingScreen();

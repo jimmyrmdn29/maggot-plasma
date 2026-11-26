@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'estimasi/page_estimasi.dart';
 import 'riwayat/page_riwayat.dart';
-import 'page_kelola_mitra.dart';
+import 'kelola_mitra/page_kelola_mitra.dart';
 import 'page_kelola_artikel.dart';
-import '../backend/auth_service.dart';
+import '../backend/auth/autentikasi_pengguna.dart';
 
 class DashboardAdminWeb extends StatefulWidget {
   const DashboardAdminWeb({super.key});
@@ -53,7 +53,7 @@ class _DashboardAdminWebState extends State<DashboardAdminWeb> {
             ),
             onPressed: () async {
               Navigator.pop(ctx);
-              await AuthService().logout();
+              await AutentikasiPengguna().logout();
             },
             child: const Text("LOGOUT", style: TextStyle(fontWeight: FontWeight.bold)),
           ),

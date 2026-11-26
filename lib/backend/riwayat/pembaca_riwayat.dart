@@ -53,62 +53,7 @@ class PembacaRiwayat {
     for (final doc in docs) {
       try {
         final user = doc.data() as Map<String, dynamic>? ?? {};
-        if (user['role'] == 'admin') continue;
-
-        final String uidMitra = doc.id;
-        final String namaMitra = user['nama']?.toString() ?? "Mitra";
-        final dynamic batchRaw = user['batch'];
-        if (batchRaw is! List) continue;
-
-        for (final b in batchRaw) {
-          if (b is! Map<String, dynamic>) continue;
-
-          final bool isBatchBaru = b.containsKey('batchKode') || b.containsKey('detailTrays');
-
-          if (isBatchBaru) {
-            final tglBungkusStr = b['tanggalFormatted']?.toString() ?? "-";
-            final tglObj = parseDateSuperFast(b['tanggalBungkus'] ?? tglBungkusStr);
-
-            List<RincianTray> trays = [];
-            if (b['detailTrays'] is List) {
-              trays = (b['detailTrays'] as List)
-                  .whereType<Map<String, dynamic>>()
-                  .map((m) => RincianTray.fromMap(m))
-                  .toList();
-            }
-
-            list.add(
-              DataBatch(
-                userId: uidMitra,
-                mitra: namaMitra,
-                batchKode: b['batchKode']?.toString() ?? "BATCH",
-                tglBungkus: tglBungkusStr,
-                tglObj: tglObj,
-                totalBerat: double.tryParse(b['totalBeratKg']?.toString() ?? '0') ?? 0.0,
-                jumlahTray: b['jumlahTray'] ?? (b['daftarNamaTray'] as List?)?.length ?? 1,
-                status: (b['status']?.toString() ?? "TERBUNGKUS").toUpperCase(),
-                detailTrays: trays,
-              ),
-            );
-          } else {
-            final tglPanenStr = b['tanggalPanen']?.toString() ?? "-";
-            final tglObj = parseDateSuperFast(tglPanenStr);
-
-            list.add(
-              DataBatch(
-                userId: uidMitra,
-                mitra: namaMitra,
-                batchKode: "LEGACY-${b['nama'] ?? 'TRAY'}",
-                tglBungkus: tglPanenStr,
-                tglObj: tglObj,
-                totalBerat: double.tryParse(b['hasilKg']?.toString() ?? '0') ?? 0.0,
-                jumlahTray: 1,
-                status: (b['status']?.toString() ?? "SELESAI").toUpperCase(),
-                detailTrays: [RincianTray.fromMap(b)],
-              ),
-            );
-          }
-        }
+        list.addAll(parseSatuDokumen(doc.id, user));
       } catch (e) {
         debugPrint("Error parse doc ${doc.id}: $e");
       }
@@ -116,5 +61,68 @@ class PembacaRiwayat {
 
     return list;
   }
-}
 
+  /// Parse satu dokumen user menjadi list DataBatch.
+  /// Dipisah agar bisa di-unit-test tanpa Firestore (menerima Map biasa).
+  static List<DataBatch> parseSatuDokumen(String docId, Map<String, dynamic> user) {
+    final List<DataBatch> list = [];
+    if (user['role'] == 'admin') return list;
+
+    final String uidMitra = docId;
+    final String namaMitra = user['nama']?.toString() ?? "Mitra";
+    final dynamic batchRaw = user['batch'];
+    if (batchRaw is! List) return list;
+
+    for (final b in batchRaw) {
+      if (b is! Map<String, dynamic>) continue;
+
+      final bool isBatchBaru = b.containsKey('batchKode') || b.containsKey('detailTrays');
+
+      if (isBatchBaru) {
+        final tglBungkusStr = b['tanggalFormatted']?.toString() ?? "-";
+        final tglObj = parseDateSuperFast(b['tanggalBungkus'] ?? tglBungkusStr);
+
+        List<RincianTray> trays = [];
+        if (b['detailTrays'] is List) {
+          trays = (b['detailTrays'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((m) => RincianTray.fromMap(m))
+              .toList();
+        }
+
+        list.add(
+          DataBatch(
+            userId: uidMitra,
+            mitra: namaMitra,
+            batchKode: b['batchKode']?.toString() ?? "BATCH",
+            tglBungkus: tglBungkusStr,
+            tglObj: tglObj,
+            totalBerat: double.tryParse(b['totalBeratKg']?.toString() ?? '0') ?? 0.0,
+            jumlahTray: b['jumlahTray'] ?? (b['daftarNamaTray'] as List?)?.length ?? 1,
+            status: (b['status']?.toString() ?? "TERBUNGKUS").toUpperCase(),
+            detailTrays: trays,
+          ),
+        );
+      } else {
+        final tglPanenStr = b['tanggalPanen']?.toString() ?? "-";
+        final tglObj = parseDateSuperFast(tglPanenStr);
+
+        list.add(
+          DataBatch(
+            userId: uidMitra,
+            mitra: namaMitra,
+            batchKode: "LEGACY-${b['nama'] ?? 'TRAY'}",
+            tglBungkus: tglPanenStr,
+            tglObj: tglObj,
+            totalBerat: double.tryParse(b['hasilKg']?.toString() ?? '0') ?? 0.0,
+            jumlahTray: 1,
+            status: (b['status']?.toString() ?? "SELESAI").toUpperCase(),
+            detailTrays: [RincianTray.fromMap(b)],
+          ),
+        );
+      }
+    }
+
+    return list;
+  }
+}

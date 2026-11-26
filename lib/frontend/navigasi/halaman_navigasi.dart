@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../backend/auth_service.dart';
+import '../../backend/auth/autentikasi_pengguna.dart';
 import '../login_page.dart';
 import '../profil_tidak_ditemukan_page.dart';
 import '../widget/app_header_mitra.dart';
@@ -38,7 +38,7 @@ class _HalamanNavigasiState extends State<HalamanNavigasi> {
         return Scaffold(
           appBar: AppHeaderMitra(
             namaMitra: userData['nama'] ?? 'Mitra',
-            onLogout: () => AuthService().logout(),
+            onLogout: () => AutentikasiPengguna().logout(),
           ),
           body: halaman[_indexMenu],
           bottomNavigationBar: BottomNavigationBar(

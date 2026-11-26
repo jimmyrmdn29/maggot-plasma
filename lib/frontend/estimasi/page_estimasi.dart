@@ -1,13 +1,7 @@
 // page_Estimasi.dart
-import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../backend/estimasi/data_estimasi.dart';
-import '../../backend/estimasi/pembaca_estimasi.dart';
-import '../../backend/estimasi/pembuat_laporan_estimasi.dart';
-import '../../backend/estimasi/penyaring_estimasi.dart';
+import 'estimasi_controller.dart';
 import 'tema_estimasi.dart';
 import 'widget/dialog_filter_tanggal.dart';
 import 'widget/tampilan_footer_estimasi.dart';
@@ -29,102 +23,34 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
   @override
   bool get wantKeepAlive => true;
 
-  late final Stream<QuerySnapshot> _usersStream;
-  List<QueryDocumentSnapshot>? _cachedDocs;
-  List<DataEstimasi> _cachedRawItems = [];
-
-  final TextEditingController _searchController = TextEditingController();
-  Timer? _debounceTimer;
-  String _cariMitra = "";
-  DateTimeRange? _selectedRange;
-  int? _startDateKey;
-  int? _endDateKey;
-
-  bool _sortTerbaru = true;
-  bool _isExporting = false;
-  bool _isExportSuccess = false;
-
-  int _halamanAktif = 1;
-  int _barisPerHalaman = 10;
-  static const List<int> _opsiBaris = [10, 25, 50];
+  late final EstimasiController _controller;
 
   @override
   void initState() {
     super.initState();
-    _usersStream = FirebaseFirestore.instance.collection('users').snapshots();
+    _controller = EstimasiController(
+      onSnackbar: (msg, {isError = false}) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: isError ? Colors.red : null,
+          ),
+        );
+      },
+    );
+    _controller.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
-    _searchController.dispose();
+    _controller.removeListener(_onChanged);
+    _controller.dispose();
     super.dispose();
-  }
-
-  void _onSearchChanged(String query) {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        setState(() {
-          _cariMitra = query.trim().toLowerCase();
-          _halamanAktif = 1;
-        });
-      }
-    });
-  }
-
-  void _terapkanRentangBaru(DateTimeRange range) {
-    setState(() {
-      _selectedRange = range;
-      _startDateKey = PembacaEstimasi.toIntegerDate(range.start);
-      _endDateKey = PembacaEstimasi.toIntegerDate(range.end);
-      _halamanAktif = 1;
-    });
-  }
-
-  List<DataEstimasi> _dapatkanDataParsed(List<QueryDocumentSnapshot> docs) {
-    if (identical(_cachedDocs, docs)) {
-      return _cachedRawItems;
-    }
-    _cachedDocs = docs;
-    _cachedRawItems = PembacaEstimasi.parseFirestoreDocuments(docs);
-    return _cachedRawItems;
-  }
-
-  Future<void> _exportToExcel(List<DataEstimasi> data) async {
-    if (_isExporting || _isExportSuccess || data.isEmpty) return;
-
-    setState(() {
-      _isExporting = true;
-    });
-
-    // 🚀 Beri jeda 100ms agar event loop merender efek tombol tanpa lag
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    try {
-      await PembuatLaporanEstimasi.exportAndOpenFile(
-        data: data,
-        selectedRange: _selectedRange,
-      );
-
-      if (mounted) {
-        setState(() {
-          _isExporting = false;
-          _isExportSuccess = true;
-        });
-
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) setState(() => _isExportSuccess = false);
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isExporting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal mengunduh: $e"), backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 
   Future<void> _bukaFilterTanggalCepat(BuildContext context) async {
@@ -132,26 +58,10 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
       context: context,
       barrierDismissible: true,
       builder: (context) => DialogFilterTanggal(
-        rangeAkhir: _selectedRange,
-        onTerapkan: _terapkanRentangBaru,
+        rangeAkhir: _controller.selectedRange,
+        onTerapkan: _controller.terapkanRentangBaru,
       ),
     );
-  }
-
-  void _hapusFilterTanggal() {
-    setState(() {
-      _selectedRange = null;
-      _startDateKey = null;
-      _endDateKey = null;
-      _halamanAktif = 1;
-    });
-  }
-
-  void _onSortChange(bool value) {
-    setState(() {
-      _sortTerbaru = value;
-      _halamanAktif = 1;
-    });
   }
 
   // ==========================================================
@@ -164,9 +74,9 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
     return Scaffold(
       backgroundColor: TemaEstimasi.background,
       body: StreamBuilder<QuerySnapshot>(
-        stream: _usersStream,
+        stream: _controller.usersStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && _cachedDocs == null) {
+          if (snapshot.connectionState == ConnectionState.waiting && snapshot.data == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -174,76 +84,42 @@ class _PageEstimasiState extends State<PageEstimasi> with AutomaticKeepAliveClie
             return Center(child: Text("Terjadi kesalahan: ${snapshot.error}"));
           }
 
-          final rawDocs = snapshot.data?.docs ?? _cachedDocs ?? [];
-          final rawItems = _dapatkanDataParsed(rawDocs);
-
-          final bool filterTgl = _startDateKey != null && _endDateKey != null;
-          final int startK = _startDateKey ?? 0;
-          final int endK = _endDateKey ?? 0;
-
-          final List<DataEstimasi> filtered = PenyaringEstimasi.terapkanFilter(
-            data: rawItems,
-            cariMitra: _cariMitra,
-            startDateKey: filterTgl ? startK : null,
-            endDateKey: filterTgl ? endK : null,
-          );
-
-          final List<DataEstimasi> sorted =
-              PenyaringEstimasi.mengurutkan(data: filtered, sortTerbaru: _sortTerbaru);
-
-          final int totalData = sorted.length;
-          final int totalHalaman = totalData == 0 ? 1 : (totalData / _barisPerHalaman).ceil();
-
-          if (_halamanAktif > totalHalaman) _halamanAktif = totalHalaman;
-          if (_halamanAktif < 1) _halamanAktif = 1;
-
-          final int startIndex = (totalData == 0) ? 0 : (_halamanAktif - 1) * _barisPerHalaman;
-          final int endIndex = min(startIndex + _barisPerHalaman, totalData);
-          final List<DataEstimasi> dataHalamanIni =
-              (totalData == 0) ? [] : sorted.sublist(startIndex, endIndex);
+          final rawDocs = snapshot.data?.docs ?? [];
+          _controller.parseAndFilter(rawDocs);
 
           return Column(
             children: [
               TampilanToolbarEstimasi(
-                controller: _searchController,
-                onCariChanged: _onSearchChanged,
-                sortTerbaru: _sortTerbaru,
-                onSortChange: _onSortChange,
-                selectedRange: _selectedRange,
+                controller: _controller.searchController,
+                onCariChanged: _controller.onSearchChanged,
+                sortTerbaru: _controller.sortTerbaru,
+                onSortChange: _controller.onSortChange,
+                selectedRange: _controller.selectedRange,
                 onBukaFilterTanggal: () => _bukaFilterTanggalCepat(context),
-                onHapusFilterTanggal: _hapusFilterTanggal,
+                onHapusFilterTanggal: _controller.hapusFilterTanggal,
               ),
               const Divider(height: 1, thickness: 1),
               Expanded(
-                child: TampilanTabelEstimasi(dataHalamanIni: dataHalamanIni),
+                child: TampilanTabelEstimasi(dataHalamanIni: _controller.dataHalamanIni),
               ),
               const Divider(height: 1, thickness: 1),
               TampilanPaginationEstimasi(
-                totalData: totalData,
-                totalHalaman: totalHalaman,
-                startIndex: startIndex,
-                endIndex: endIndex,
-                halamanAktif: _halamanAktif,
-                barisPerHalaman: _barisPerHalaman,
-                opsiBaris: _opsiBaris,
-                onHalamanChange: (page) {
-                  setState(() {
-                    _halamanAktif = page;
-                  });
-                },
-                onBarisChange: (val) {
-                  setState(() {
-                    _barisPerHalaman = val;
-                    _halamanAktif = 1;
-                  });
-                },
+                totalData: _controller.totalData,
+                totalHalaman: _controller.totalHalaman,
+                startIndex: _controller.startIndex,
+                endIndex: _controller.endIndex,
+                halamanAktif: _controller.halamanAktif,
+                barisPerHalaman: _controller.barisPerHalaman,
+                opsiBaris: EstimasiController.opsiBaris,
+                onHalamanChange: _controller.onHalamanChange,
+                onBarisChange: _controller.onBarisChange,
               ),
               const Divider(height: 1, thickness: 1),
               TampilanFooterEstimasi(
-                data: sorted,
-                sedangExport: _isExporting,
-                exportSuccess: _isExportSuccess,
-                onExport: _exportToExcel,
+                data: _controller.sorted,
+                sedangExport: _controller.isExporting,
+                exportSuccess: _controller.isExportSuccess,
+                onExport: _controller.exportToExcel,
               ),
             ],
           );

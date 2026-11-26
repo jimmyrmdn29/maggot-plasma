@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../backend/maggot_repository.dart';
+import '../../backend/panen/penyaring_panen.dart';
 import '../menu1.dart';
 import '../menu2.dart';
 import '../panen/page_verifikasi_panen.dart';
@@ -22,6 +23,12 @@ List<Widget> buatHalamanMitra({
       List<Map<String, dynamic>>.from(userData['panen'] ?? []);
   final List<Map<String, dynamic>> dbBatch =
       List<Map<String, dynamic>>.from(userData['batch'] ?? []);
+
+  // Tray yang sudah pernah dibungkus tidak boleh muncul lagi di Menu 3.
+  final List<Map<String, dynamic>> dbPanenAktif = PenyaringPanen.daftarAktif(
+    daftarPanen: dbPanen,
+    daftarBatch: dbBatch,
+  );
 
   return <Widget>[
     MenuSatu(
@@ -59,11 +66,11 @@ List<Widget> buatHalamanMitra({
       ),
     ),
     PageVerifikasiPanen(
-      daftarPanen: dbPanen,
+      daftarPanen: dbPanenAktif,
       onBungkusBatch: (paketBatch) => MaggotRepository.bungkusBatch(
         uid: user.uid,
         paketBatch: paketBatch,
-        dbPanenLama: dbPanen,
+        dbPanenLama: dbPanenAktif,
       ),
       onUpdateFotoBatch: (batchKode, detailTrays) => MaggotRepository.updateFotoBatch(
         uid: user.uid,

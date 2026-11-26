@@ -20,9 +20,13 @@ class MitraItem {
 
   factory MitraItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    return MitraItem.fromMap(doc.id, data);
+  }
+
+  factory MitraItem.fromMap(String uid, Map<String, dynamic> data) {
     final rawSiklus = data['siklus'];
     return MitraItem(
-      uid: doc.id,
+      uid: uid,
       nama: (data['nama'] ?? "Tanpa Nama").toString().trim(),
       email: (data['email'] ?? "-").toString().trim(),
       counterTray: data['counterTray'] is int

@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../backend/auth_service.dart';
+import '../backend/auth/autentikasi_pengguna.dart';
 
 class ProfilTidakDitemukanPage extends StatefulWidget {
   const ProfilTidakDitemukanPage({super.key});
@@ -43,7 +43,7 @@ class _ProfilTidakDitemukanPageState extends State<ProfilTidakDitemukanPage> {
   Future<void> _muatUlangStatus() async {
     setState(() => _isReloading = true);
     try {
-      await AuthService().reloadUser();
+      await AutentikasiPengguna().reloadUser();
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +94,7 @@ class _ProfilTidakDitemukanPageState extends State<ProfilTidakDitemukanPage> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              AuthService().logout();
+              AutentikasiPengguna().logout();
             },
             child: const Text("YA, KELUAR"),
           ),

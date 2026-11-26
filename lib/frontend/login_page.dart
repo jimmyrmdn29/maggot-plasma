@@ -1,6 +1,6 @@
 // login_page.dart
 import 'package:flutter/material.dart';
-import '../backend/auth_service.dart';
+import '../backend/auth/autentikasi_pengguna.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CATATAN PENTING (UNTUK MITRA KONTRAK):
@@ -67,7 +67,7 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
 
-    final String? err = await AuthService().loginEmail(email, pass);
+    final String? err = await AutentikasiPengguna().loginEmail(email, pass);
 
     if (mounted) {
       if (err != null) {

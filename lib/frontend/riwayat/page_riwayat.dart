@@ -7,30 +7,21 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
-import '../backend/riwayat_backend.dart';
+import 'package:path_provider/path_provider.dart';
+
+import '../../backend/riwayat/rincian_tray.dart';
+import '../../backend/riwayat/data_batch.dart';
+import '../../backend/riwayat/pembaca_riwayat.dart';
+import '../../backend/riwayat/pembuat_laporan_riwayat.dart';
+import 'theme_riwayat.dart';
+import 'widget/tampilan_toolbar_riwayat.dart';
+import 'widget/tampilan_tabel_riwayat.dart';
+import 'widget/tampilan_pagination_riwayat.dart';
+import 'widget/tampilan_footer_riwayat.dart';
 
 // ============================================================================
-// 1. DESIGN THEME CONSTANTS
-// ============================================================================
-class _RiwayatTheme {
-  static const Color primary = Color(0xFF455A64);
-  static const Color primaryDark = Color(0xFF1A237E);
-  static const Color accentBlue = Color(0xFF1565C0);
-  static const Color success = Color(0xFF2E7D32);
-  static const Color warning = Color(0xFFE65100);
-  static const Color textMuted = Color(0xFF546E7A);
-  static const Color background = Color(0xFFF9FAFB);
-  static const Color surfaceGrey = Color(0xFFECEFF1);
-  static const Color tableHeaderBg = Color(0xFFF5F5F5);
-  static const Color borderGrey = Color(0xFFE0E0E0);
-  static const Color failureBg = Color(0xFFFFEBEE);
-  static const Color cardBg = Color(0xFFFAFAFA);
-}
-
-// ============================================================================
-// WIDGET UTAMA (PLUG & PLAY)
+// 1. HALAMAN RIWAYAT (PLUG & PLAY)
 // ============================================================================
 class PageRiwayat extends StatefulWidget {
   const PageRiwayat({super.key});
@@ -50,7 +41,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
   final Set<String> _downloadingBatches = {};
 
   int _lastDocHash = 0;
-  List<BatchItem> _cachedMasterList = [];
+  List<DataBatch> _cachedMasterList = [];
 
   int _halamanAktif = 1;
   int _barisPerHalaman = 10;
@@ -76,7 +67,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
     });
   }
 
-  Future<List<TrayDetailItem>> _ambilDetailTrays(BatchItem batch) async {
+  Future<List<RincianTray>> _ambilDetailTrays(DataBatch batch) async {
     if (batch.detailTrays.isNotEmpty) {
       return batch.detailTrays;
     }
@@ -95,7 +86,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
         if (rawList is List) {
           return rawList
               .whereType<Map<String, dynamic>>()
-              .map((m) => TrayDetailItem.fromMap(m))
+              .map((m) => RincianTray.fromMap(m))
               .toList();
         }
       }
@@ -104,7 +95,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
     return [];
   }
 
-  Future<void> _exportSingleBatchToExcel(BatchItem batch) async {
+  Future<void> _exportSingleBatchToExcel(DataBatch batch) async {
     final String kodeBatch = batch.batchKode;
     if (_downloadingBatches.contains(kodeBatch)) return;
 
@@ -113,7 +104,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
     });
 
     try {
-      final List<TrayDetailItem> detailTrays = await _ambilDetailTrays(batch);
+      final List<RincianTray> detailTrays = await _ambilDetailTrays(batch);
 
       final Map<String, dynamic> params = {
         'batch': {
@@ -130,9 +121,9 @@ class _PageRiwayatState extends State<PageRiwayat> {
 
       if (kIsWeb) {
         await Future.delayed(const Duration(milliseconds: 40));
-        fileBytes = RiwayatExcelEngine.generateExcelBytes(params);
+        fileBytes = PembuatLaporanRiwayat.generateExcelBytes(params);
       } else {
-        fileBytes = await compute(RiwayatExcelEngine.generateExcelBytes, params);
+        fileBytes = await compute(PembuatLaporanRiwayat.generateExcelBytes, params);
       }
 
       if (fileBytes == null) throw Exception("Format Excel gagal dibuat.");
@@ -154,7 +145,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Berhasil mengunduh $namaFileExcel"),
-            backgroundColor: _RiwayatTheme.success,
+            backgroundColor: TemaRiwayat.success,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 2),
           ),
@@ -180,7 +171,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
   }
 
   // ==========================================================================
-  // 6. DIALOG FILTER TANGGAL
+  // DIALOG FILTER TANGGAL
   // ==========================================================================
   Future<void> _bukaFilterTanggalCepat(BuildContext context) async {
     final now = DateTime.now();
@@ -348,7 +339,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _RiwayatTheme.primary,
+                          backgroundColor: TemaRiwayat.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -373,7 +364,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
   Widget _buildPresetChip(String label, VoidCallback onTap) {
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF37474F))),
-      backgroundColor: _RiwayatTheme.surfaceGrey,
+      backgroundColor: TemaRiwayat.surfaceGrey,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       onPressed: onTap,
@@ -381,16 +372,16 @@ class _PageRiwayatState extends State<PageRiwayat> {
   }
 
   // ==========================================================================
-  // 7. DIALOG DETAIL TRAY & BUKTI FOTO
+  // DIALOG DETAIL TRAY & BUKTI FOTO
   // ==========================================================================
-  void _tampilkanDetailTrayDialog(BatchItem batch) async {
+  void _tampilkanDetailTrayDialog(DataBatch batch) async {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
 
-    final List<TrayDetailItem> detail = await _ambilDetailTrays(batch);
+    final List<RincianTray> detail = await _ambilDetailTrays(batch);
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -417,12 +408,12 @@ class _PageRiwayatState extends State<PageRiwayat> {
                   itemCount: detail.length,
                   itemBuilder: (context, i) {
                     final t = detail[i];
-                    final Uint8List? fotoBytes = RiwayatUtils.safeDecodeBase64(t.fotoBase64);
+                    final Uint8List? fotoBytes = PembacaRiwayat.safeDecodeBase64(t.fotoBase64);
                     final bool hasImage = t.fotoUrl.isNotEmpty || fotoBytes != null;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
-                      color: t.isGagal ? _RiwayatTheme.failureBg : _RiwayatTheme.cardBg,
+                      color: t.isGagal ? TemaRiwayat.failureBg : TemaRiwayat.cardBg,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       child: Padding(
                         padding: const EdgeInsets.all(10),
@@ -463,7 +454,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
                                         : Container(
                                             width: 65,
                                             height: 65,
-                                            color: _RiwayatTheme.borderGrey,
+                                            color: TemaRiwayat.borderGrey,
                                             child: const Icon(Icons.no_photography, size: 24, color: Colors.grey),
                                           )),
                               ),
@@ -551,7 +542,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: _RiwayatTheme.tableHeaderBg, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: TemaRiwayat.tableHeaderBg, borderRadius: BorderRadius.circular(8)),
                 child: Row(
                   children: [
                     const Icon(Icons.location_on, color: Colors.red, size: 18),
@@ -568,12 +559,12 @@ class _PageRiwayatState extends State<PageRiwayat> {
   }
 
   // ==========================================================================
-  // 8. BUILD TABLE & UI
+  // 2. BUILD (KOMPOSISI HALAMAN)
   // ==========================================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _RiwayatTheme.background,
+      backgroundColor: TemaRiwayat.background,
       body: StreamBuilder<QuerySnapshot>(
         stream: _usersStream,
         builder: (context, snapshot) {
@@ -591,7 +582,7 @@ class _PageRiwayatState extends State<PageRiwayat> {
             final int currentHash = Object.hashAll(docs.map((d) => d.id));
             if (_lastDocHash != currentHash) {
               _lastDocHash = currentHash;
-              _cachedMasterList = RiwayatUtils.parseFirestoreDocs(docs);
+              _cachedMasterList = PembacaRiwayat.parseFirestoreDocs(docs);
             }
           }
 
@@ -627,396 +618,70 @@ class _PageRiwayatState extends State<PageRiwayat> {
 
           final int startIndex = (totalData == 0) ? 0 : (_halamanAktif - 1) * _barisPerHalaman;
           final int endIndex = min(startIndex + _barisPerHalaman, totalData);
-          final List<BatchItem> dataHalamanIni =
+          final List<DataBatch> dataHalamanIni =
               (totalData == 0) ? [] : filtered.sublist(startIndex, endIndex);
 
           return Column(
             children: [
-              _buildTopToolbar(context),
+              TampilanToolbarRiwayat(
+                controller: _searchController,
+                onCariChanged: (v) {
+                  setState(() {
+                    cariMitra = v;
+                    _halamanAktif = 1;
+                  });
+                },
+                sortTerbaru: sortTerbaru,
+                onSortChange: (v) {
+                  setState(() {
+                    sortTerbaru = v;
+                    _halamanAktif = 1;
+                  });
+                },
+                selectedRange: selectedRange,
+                onBukaFilterTanggal: () => _bukaFilterTanggalCepat(context),
+                onHapusFilterTanggal: () {
+                  setState(() {
+                    selectedRange = null;
+                    _halamanAktif = 1;
+                  });
+                },
+              ),
               const Divider(height: 1, thickness: 1),
-              Expanded(child: _buildDataTable(dataHalamanIni)),
+              Expanded(
+                child: TampilanTabelRiwayat(
+                  dataHalamanIni: dataHalamanIni,
+                  downloadingBatches: _downloadingBatches,
+                  onLihatDetail: (item) => _tampilkanDetailTrayDialog(item),
+                  onUnduhBatch: (item) => _exportSingleBatchToExcel(item),
+                ),
+              ),
               const Divider(height: 1, thickness: 1),
-              _buildPaginationBar(totalData, totalHalaman, startIndex, endIndex),
+              TampilanPaginationRiwayat(
+                totalData: totalData,
+                totalHalaman: totalHalaman,
+                startIndex: startIndex,
+                endIndex: endIndex,
+                halamanAktif: _halamanAktif,
+                barisPerHalaman: _barisPerHalaman,
+                opsiBaris: _opsiBaris,
+                onHalamanChange: (page) {
+                  setState(() {
+                    _halamanAktif = page;
+                  });
+                },
+                onBarisChange: (val) {
+                  setState(() {
+                    _barisPerHalaman = val;
+                    _halamanAktif = 1;
+                  });
+                },
+              ),
               const Divider(height: 1, thickness: 1),
-              _buildFooter(filtered),
+              TampilanFooterRiwayat(data: filtered),
             ],
           );
         },
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // 9. SUB-WIDGETS
-  // ==========================================================================
-  Widget _buildTopToolbar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              onChanged: (v) {
-                setState(() {
-                  cariMitra = v;
-                  _halamanAktif = 1;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: "Cari nama mitra / kode batch...",
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          Container(
-            height: 44,
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: _RiwayatTheme.surfaceGrey,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildSortTab(
-                  label: "Terbaru",
-                  isActive: sortTerbaru,
-                  activeColor: _RiwayatTheme.accentBlue,
-                  onTap: () {
-                    if (sortTerbaru) return;
-                    setState(() {
-                      sortTerbaru = true;
-                      _halamanAktif = 1;
-                    });
-                  },
-                ),
-                _buildSortTab(
-                  label: "Terlama",
-                  isActive: !sortTerbaru,
-                  activeColor: _RiwayatTheme.warning,
-                  onTap: () {
-                    if (!sortTerbaru) return;
-                    setState(() {
-                      sortTerbaru = false;
-                      _halamanAktif = 1;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          ElevatedButton.icon(
-            onPressed: () => _bukaFilterTanggalCepat(context),
-            icon: const Icon(Icons.date_range, size: 16),
-            label: Text(
-              selectedRange == null
-                  ? "FILTER TANGGAL"
-                  : "${DateFormat('dd/MM').format(selectedRange!.start)} - ${DateFormat('dd/MM').format(selectedRange!.end)}",
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              backgroundColor: _RiwayatTheme.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          if (selectedRange != null) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: "Hapus Filter Tanggal",
-              onPressed: () {
-                setState(() {
-                  selectedRange = null;
-                  _halamanAktif = 1;
-                });
-              },
-              icon: const Icon(Icons.close, color: Colors.red),
-            ),
-          ]
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSortTab({
-    required String label,
-    required bool isActive,
-    required Color activeColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: isActive
-              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            color: isActive ? activeColor : _RiwayatTheme.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDataTable(List<BatchItem> dataHalamanIni) {
-    if (dataHalamanIni.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 50, color: Colors.grey[400]),
-            const SizedBox(height: 8),
-            Text("Data batch tidak ditemukan", style: TextStyle(color: Colors.grey[600])),
-          ],
-        ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(_RiwayatTheme.tableHeaderBg),
-                columnSpacing: 22,
-                dataRowMinHeight: 52,
-                dataRowMaxHeight: 52,
-                columns: const [
-                  DataColumn(label: Text("NAMA MITRA", style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text("KODE BATCH", style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text("TGL BUNGKUS", style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text("JUMLAH TRAY", style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text("TOTAL HASIL", style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text("AKSI", style: TextStyle(fontWeight: FontWeight.bold))),
-                ],
-                rows: dataHalamanIni.map((item) {
-                  final bool isDownloading = _downloadingBatches.contains(item.batchKode);
-
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(item.mitra, style: const TextStyle(fontWeight: FontWeight.w600))),
-                      DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          child: Text(item.batchKode, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      DataCell(Text(item.tglBungkus)),
-                      DataCell(Text("${item.jumlahTray} Tray", style: const TextStyle(fontWeight: FontWeight.w500))),
-                      DataCell(
-                        Text(
-                          "${item.totalBerat} Kg",
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: _RiwayatTheme.accentBlue),
-                        ),
-                      ),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove_red_eye_outlined, color: Colors.blueGrey),
-                              tooltip: "Lihat Detail & Foto",
-                              onPressed: () => _tampilkanDetailTrayDialog(item),
-                            ),
-                            isDownloading
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12.0),
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2.2, color: _RiwayatTheme.success),
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(Icons.file_download_outlined, color: _RiwayatTheme.success),
-                                    tooltip: "Unduh Excel Batch Ini",
-                                    onPressed: () => _exportSingleBatchToExcel(item),
-                                  ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPaginationBar(int totalData, int totalHalaman, int startIndex, int endIndex) {
-    List<int> nomorHalaman = [];
-    int startPage = max(1, _halamanAktif - 2);
-    int endPage = min(totalHalaman, startPage + 4);
-
-    if (endPage - startPage < 4) {
-      startPage = max(1, endPage - 4);
-    }
-    if (startPage < 1) startPage = 1;
-
-    for (int i = startPage; i <= endPage; i++) {
-      nomorHalaman.add(i);
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Text(
-                totalData == 0
-                    ? "Menampilkan 0 data"
-                    : "Menampilkan ${startIndex + 1} - $endIndex dari $totalData batch",
-                style: const TextStyle(fontSize: 12, color: Color(0xFF616161), fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(width: 16),
-              Row(
-                children: [
-                  const Text("Baris: ", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  DropdownButton<int>(
-                    value: _barisPerHalaman,
-                    isDense: true,
-                    underline: const SizedBox(),
-                    items: _opsiBaris.map((val) {
-                      return DropdownMenuItem<int>(
-                        value: val,
-                        child: Text("$val", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _barisPerHalaman = val;
-                          _halamanAktif = 1;
-                        });
-                      }
-                    },
-                  ),
-                ],
-              )
-            ],
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.first_page, size: 20),
-                tooltip: "Halaman Pertama",
-                onPressed: _halamanAktif > 1 ? () => setState(() => _halamanAktif = 1) : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 20),
-                tooltip: "Sebelumnya",
-                onPressed: _halamanAktif > 1 ? () => setState(() => _halamanAktif--) : null,
-              ),
-              const SizedBox(width: 4),
-              ...nomorHalaman.map((pageNo) {
-                final bool isActive = pageNo == _halamanAktif;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(36, 36),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      backgroundColor: isActive ? _RiwayatTheme.primary : Colors.transparent,
-                      side: BorderSide(
-                        color: isActive ? _RiwayatTheme.primary : _RiwayatTheme.borderGrey,
-                        width: 1.0,
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                    onPressed: () => setState(() => _halamanAktif = pageNo),
-                    child: Text(
-                      "$pageNo",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                        color: isActive ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
-                );
-              }),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 20),
-                tooltip: "Berikutnya",
-                onPressed: _halamanAktif < totalHalaman ? () => setState(() => _halamanAktif++) : null,
-              ),
-              IconButton(
-                icon: const Icon(Icons.last_page, size: 20),
-                tooltip: "Halaman Terakhir",
-                onPressed: _halamanAktif < totalHalaman ? () => setState(() => _halamanAktif = totalHalaman) : null,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFooter(List<BatchItem> data) {
-    double totalKg = data.fold(0.0, (acc, item) => acc + item.totalBerat);
-    int totalTray = data.fold(0, (acc, item) => acc + item.jumlahTray);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.analytics_outlined, color: Colors.blueGrey, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                "Total Record: ${data.length} Batch ($totalTray Tray)",
-                style: const TextStyle(fontSize: 13, color: Color(0xFF424242), fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          Text(
-            "Total Panen: ${totalKg.toStringAsFixed(1)} Kg",
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: _RiwayatTheme.primaryDark,
-            ),
-          ),
-        ],
       ),
     );
   }

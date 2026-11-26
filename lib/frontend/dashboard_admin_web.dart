@@ -1,10 +1,11 @@
 // dashboard_Admin_Web.dart
 import 'package:flutter/material.dart';
 
-import 'page_estimasi.dart';
-import 'page_riwayat.dart';
+import 'estimasi/page_estimasi.dart';
+import 'riwayat/page_riwayat.dart';
 import 'page_kelola_mitra.dart';
-import 'page_kelola_artikel.dart';import '../backend/auth_service.dart';
+import 'page_kelola_artikel.dart';
+import '../backend/auth_service.dart';
 
 class DashboardAdminWeb extends StatefulWidget {
   const DashboardAdminWeb({super.key});

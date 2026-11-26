@@ -1,24 +1,59 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ============================================================
-    // PERINGATAN
-    // ============================================================
-    // File ini belum berisi aturan lengkap untuk koleksi lain.
-    // Sebelum deploy, tempel aturan yang sekarang aktif di
-    // Firebase Console (Firestore -> Rules) di bawah ini.
-    //
-    // Jangan deploy file ini apa adanya jika aturan lama belum
-    // digabungkan, karena koleksi selain "artikel" bisa terblokir.
-    // ============================================================
 
+    function isLoggedIn() {
+      return request.auth != null;
+    }
     function isAdmin() {
-      return request.auth != null &&
+      return isLoggedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    function isOwner(userId) {
+      return isLoggedIn() && request.auth.uid == userId;
+    }
 
+    // ==========================================================
+    // 1. DOKUMEN UTAMA USER
+    // ==========================================================
+    match /users/{userId} {
+      // Baca: pemilik sendiri, atau admin baca siapa saja
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      // Bikin dokumen user baru: HANYA admin (nutup celah bikin akun tanpa cek role)
+      allow create: if isAdmin();
+
+      // Mitra boleh update dokumen sendiri, TAPI TIDAK BOLEH ganti field 'role'
+      allow update: if (isOwner(userId) &&
+                          request.resource.data.role == resource.data.role) ||
+                        isAdmin();
+
+      allow delete: if isAdmin();
+
+      // ========================================================
+      // 2. SUB-KOLEKSI BATCHES
+      // ========================================================
+      match /batches/{batchId} {
+        allow read: if isOwner(userId) || isAdmin();
+        // Mitra boleh bikin & update batch sendiri, TAPI TIDAK BOLEH hapus (jaga riwayat/audit trail)
+        allow create, update: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ==========================================================
+    // 3. COLLECTION GROUP QUERY (UNTUK ADMIN WEB)
+    // ==========================================================
+    match /{path=**}/batches/{batchId} {
+      allow read: if isAdmin();
+    }
+
+    // ==========================================================
+    // 4. KOLEKSI ARTIKEL
+    // ==========================================================
     match /artikel/{artikelId} {
-      allow read: if request.auth != null;
+      allow read: if isLoggedIn();
       allow create, update, delete: if isAdmin();
     }
   }

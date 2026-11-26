@@ -15,7 +15,7 @@ class AppInitializer {
     );
 
     FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
+      persistenceEnabled: !kIsWeb,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
 

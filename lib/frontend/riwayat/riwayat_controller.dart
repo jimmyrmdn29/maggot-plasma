@@ -38,8 +38,7 @@ class RiwayatController extends ChangeNotifier {
   final Set<String> _downloadingBatches = {};
   Set<String> get downloadingBatches => _downloadingBatches;
 
-  int _lastDocHash = 0;
-  List<DataBatch> _cachedMasterList = [];
+  List<DataBatch> _masterList = [];
 
   int _halamanAktif = 1;
   int _barisPerHalaman = 10;
@@ -86,17 +85,14 @@ class RiwayatController extends ChangeNotifier {
 
   // ---------- parsing + cache ----------
   List<DataBatch> parseMasterList(List<QueryDocumentSnapshot> docs) {
-    final int currentHash = Object.hashAll(docs.map((d) => d.id));
-    if (currentHash == _lastDocHash && _cachedMasterList.isNotEmpty) {
-      return _cachedMasterList;
-    }
-    _lastDocHash = currentHash;
-    _cachedMasterList = PembacaRiwayat.parseFirestoreDocs(docs);
-    return _cachedMasterList;
+    // Selalu parse ulang dari snapshot terbaru. ID dokumen saja tidak cukup,
+    // karena isi array batch bisa berubah pada dokumen yang sama.
+    _masterList = PembacaRiwayat.parseFirestoreDocs(docs);
+    return _masterList;
   }
 
   List<DataBatch> get filtered {
-    var list = List<DataBatch>.from(_cachedMasterList);
+    var list = List<DataBatch>.from(_masterList);
 
     if (cariMitra.isNotEmpty) {
       list.removeWhere((b) =>
